@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <!-- 目标 net8.0，但允许在更高的运行时上跑，本机不必装 .NET 8 运行时 -->
+    <RollForward>Major</RollForward>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 不引用 mod 工程（那是 net40 的游戏内程序集）：把不碰游戏的源码直接编进来。src/Game、src/Ui 与 ArenaMod.cs 依赖游戏绑定层，不编。 -->
+    <Compile Include="..\src\CardIds.cs" Link="src\CardIds.cs" />
+    <Compile Include="..\src\ParamStream.cs" Link="src\ParamStream.cs" />
+    <Compile Include="..\src\ArenaConfig.cs" Link="src\ArenaConfig.cs" />
+    <Compile Include="..\src\ArenaSide.cs" Link="src\ArenaSide.cs" />
+    <Compile Include="..\src\FeedLog.cs" Link="src\FeedLog.cs" />
+    <Compile Include="..\src\ListFilter.cs" Link="src\ListFilter.cs" />
+    <Compile Include="..\src\StepController.cs" Link="src\StepController.cs" />
+    <Compile Include="..\src\DamageTally.cs" Link="src\DamageTally.cs" />
+    <Compile Include="..\src\OverflowPlan.cs" Link="src\OverflowPlan.cs" />
+    <Compile Include="..\src\BigHpPool.cs" Link="src\BigHpPool.cs" />
+    <Compile Include="..\src\OncePerOwner.cs" Link="src\OncePerOwner.cs" />
+    <Compile Include="..\src\LimitModes.cs" Link="src\LimitModes.cs" />
+    <Compile Include="..\src\RowLayout.cs" Link="src\RowLayout.cs" />
+    <Compile Include="..\src\Draws\*.cs" LinkBase="src\Draws" />
+    <Compile Include="*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\sdk\Yx.ModSdk.Testing\Yx.ModSdk.Testing.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+</Project>

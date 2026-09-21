@@ -1,0 +1,15 @@
+{
+  "id": "com.yx.arena",
+  "name": "练习场",
+  "version": "0.14.2",
+  "author": "yxp",
+  "description": "完全本地的练习对局：图鉴点牌即发牌、摆牌、炼化，双方的牌 / 血量 / 体魄都能改，打木人或自己摆的对手。不进房间、不发包。模式选择 → 单人模式 →「练习场」进场（后备热键 CTRL+ALT+1）。",
+  "sdkVersion": ">=1.0.0 <2.0.0",
+  "sandboxOnly": true,
+  "entry": "plugins/Arena.dll",
+  "entryType": "YxArena.ArenaMod",
+  "provides": {
+    "hooks": ["CardPanel.MoveToGrid", "CardPanel.MoveToHand", "CardPanel.TryUpgradeHandCard", "CardPanel.TryFuseHandCard", "CardPanel.InsertCard", "CardPanel.RefineCardAsync", "CardPanel.ReplaceCardAsync", "CardPanel.ReloadCardOrder", "BattleManager.GameStatusReq", "BattleManager.SelfInfoReq", "IllustrationCardItem.OnPointerClick", "ReadyCountdownButton.Click", "SinglePlayerModeItem.OnClick", "RogueModePart.OnShow", "SinglePlayerRoomPanel.OnGameButtonClick", "TalentItem.OnClick", "BattleTalentIconItem.OnPointerClick", "SelectInfoCell.UpdateContent", "SelectInfoCell.OnPointerEnter", "SelectInfoCell.OnPointerExit", "SelectInfoPanel.RefreshParamList", "SelectInfoPanel.OnEveryUpdate", "CardActionBase.CheckCardCost", "BattleCharacter.OnTurnStarted", "BattleCharacter.ApplyDamage", "BattleCharacter.OnHit", "BattleCharacter.ModifyHp", "BattleCharacterUI.AddTalentBuff", "BattleCharacterUI.ResetBuffItem", "ReadyLayerRecoveryingCI.OnSwitchButtonClick", "ReadyLayerRecoveryingCI.OnRecoveryButtonClick", "ReadyLayerRecoveryingCI.OnDealCardButtonClick", "BattleManager.PlayBattle", "CardActionBase.Execute", "CardActionBase.ExecuteEffect", "BattleCharacter.GetNextRandomValue", "BattleCharacter.GetNextParam"],
+    "hotkeys": ["CTRL+ALT+1", "CTRL+ALT+2", "CTRL+ALT+3", "CTRL+ALT+4"]
+  }
+}
