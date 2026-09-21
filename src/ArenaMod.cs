@@ -52,6 +52,7 @@ namespace YxArena
 
         public override void OnLoad(ModContext ctx)
         {
+            Loc.En = ctx.Lang == "en";      // 没有 ModContext 的界面 / 静态帮助类经 Loc.T 取当前语言的文案
             // SDK 的界面工具：面板 / 按钮 / 输入框；回调自动兜底（异常记在本 mod 头上）。所有界面类共用这一个。
             _ui = new UiKit(ctx);
             LoadConfig(ctx);
@@ -66,8 +67,8 @@ namespace YxArena
             _draws.Install();
             _nativeSwitch = new NativeSwitch(ctx, DoSwitchSide);
             _nativeSwitch.Install();
-            _switchOffsetX = ctx.Config.Bind("layout", "switchOffsetX", 24, "游戏自带的「切换」按钮：离「修为 / 血量」右边缘多远（往右为正）");
-            _switchOffsetY = ctx.Config.Bind("layout", "switchOffsetY", 0, "游戏自带的「切换」按钮：相对「修为 / 血量」那一行的上下偏移（往上为正）");
+            _switchOffsetX = ctx.Config.Bind("layout", "switchOffsetX", 24, ctx.T("游戏自带的「切换」按钮：离「修为 / 血量」右边缘多远（往右为正）", "Game's own Switch button: distance right of the Exp / HP row's right edge (positive = right)"));
+            _switchOffsetY = ctx.Config.Bind("layout", "switchOffsetY", 0, ctx.T("游戏自带的「切换」按钮：相对「修为 / 血量」那一行的上下偏移（往上为正）", "Game's own Switch button: vertical offset from the Exp / HP row (positive = up)"));
             _limits = new Limits(ctx);
             _limits.Mode = LimitModes.Normalize(ctx.Data.Get<int>("limitMode", LimitModes.Original));
             _limits.Install();
@@ -86,7 +87,7 @@ namespace YxArena
             _room.Install();
             _strip = new RoomStrip(_ui, OnRoomBack, OnRoomSwitchSide, OnRoomTalents, OnRoomFates);
             if (ctx.Hooks.TryPrefix("BattleTalentIconItem", "OnPointerClick", 1, OnReadyTalentIconClick) == null)
-                ctx.Log.Warn("备战界面的仙命图标点不了：用控制栏的「仙命…」");
+                ctx.Log.Warn(ctx.T("备战界面的仙命图标点不了：用控制栏的「仙命…」", "Talent icons on the setup screen aren't clickable: use \"Talents…\" on the control bar"));
             _entry = new LobbyEntry(ctx, OpenSetup);
             _entry.Install();
             _step.PauseAtStart = ctx.Data.Get<bool>("pauseAtStart", false);
@@ -121,8 +122,8 @@ namespace YxArena
             ctx.Input.RegisterHotkey("arena-leave", "CTRL+ALT+4", OnLeave);
             ctx.MainThread.EveryFrame(Tick);
 
-            if (_hooks.Complete) ctx.Log.Info("练习场就绪：模式选择 → 单人模式 →「练习场」，或 CTRL+ALT+1");
-            else ctx.Log.Warn("离线保护不完整，练习场禁止进场。没挂上：" + _hooks.Missing);
+            if (_hooks.Complete) ctx.Log.Info(ctx.T("练习场就绪：模式选择 → 单人模式 →「练习场」，或 CTRL+ALT+1", "Arena ready: Mode Select → Single Player → \"Arena\", or CTRL+ALT+1"));
+            else ctx.Log.Warn(ctx.T("离线保护不完整，练习场禁止进场。没挂上：", "Offline protection incomplete; entering the arena is blocked. Missing: ") + _hooks.Missing);
         }
 
         // ── 存档 ──────────────────────────────────────────────────────────
@@ -197,13 +198,13 @@ namespace YxArena
             _battleBar.Refresh(_battle.StepAvailable, _step.PauseAtStart, BattleHooks.IsPaused, _tallyOpen, text);
         }
 
-        void OnStep() { Context.Guard("步进", _battle.Step); }
+        void OnStep() { Context.Guard(Context.T("步进", "Step"), _battle.Step); }
 
         void OnToggleTally()
         {
             _tallyOpen = !_tallyOpen;
             Context.Data.Set("tallyOpen", _tallyOpen);
-            Context.Guard("伤害统计窗", TickBattleBar);
+            Context.Guard(Context.T("伤害统计窗", "Damage window"), TickBattleBar);
         }
 
         void OnTogglePauseAtStart()
@@ -272,18 +273,18 @@ namespace YxArena
             _barState.Overflow = _overflow.Enabled;
             _barState.LimitMode = _limits.Mode;
             _barState.SpecialName = YxArena.Draws.SpecialCards.Name(_deal.SpecialCategory);
-            _barState.Status = "正在编辑：" + side.Name + "　" + _hooks.Summary() + "　" + _draws.Summary() + "　" + _overflow.Status() + "　" + _limits.Status();
+            _barState.Status = Context.T("正在编辑：", "Editing: ") + side.Name + "　" + _hooks.Summary() + "　" + _draws.Summary() + "　" + _overflow.Status() + "　" + _limits.Status();
             _bar.Refresh(_barState);
         }
 
         static string N(int value) { return value.ToString(System.Globalization.CultureInfo.InvariantCulture); }
 
-        void OnOpenSetup() { Context.Guard("打开设置窗", OpenSetup); }
+        void OnOpenSetup() { Context.Guard(Context.T("打开设置窗", "Open setup window"), OpenSetup); }
 
         /// <summary>入口 / 大厅按钮 / 热键都先到选英雄界面（游戏自己的单人房间）；点它的「开始」才真的进场。</summary>
         void OpenSetup()
         {
-            if (!_inLobby || SceneLoader.isLoading || SceneLoader.currentSceneName != "Lobby") { Ui.Toast("只能在大厅里打开练习场"); return; }
+            if (!_inLobby || SceneLoader.isLoading || SceneLoader.currentSceneName != "Lobby") { Ui.Toast(Context.T("只能在大厅里打开练习场", "The arena can only be opened from the lobby")); return; }
             if (_room.IsOpen) return;
             if (!_room.Available) { DoEnter(); return; }      // 钩子没挂上：退回「直接用上次的角色进场」
             _room.Open();
@@ -313,15 +314,15 @@ namespace YxArena
             if (_setup != null) _setup.Close();
         }
 
-        void OnRoomBack() { Context.Guard("返回", _room.Close); }
+        void OnRoomBack() { Context.Guard(Context.T("返回", "Back"), _room.Close); }
 
-        void OnRoomSwitchSide() { Context.Guard("切换我方 / 对手", _room.SwitchSide); }
+        void OnRoomSwitchSide() { Context.Guard(Context.T("切换我方 / 对手", "Switch mine / foe"), _room.SwitchSide); }
 
-        void OnRoomFates() { Context.Guard("打开天衍仙命", OpenFates); }
+        void OnRoomFates() { Context.Guard(Context.T("打开天衍仙命", "Open fates"), OpenFates); }
 
         void OpenFates() { _setup.OpenFates(_room.Side); }
 
-        void OnRoomTalents() { Context.Guard("打开仙命", OpenRoomTalents); }
+        void OnRoomTalents() { Context.Guard(Context.T("打开仙命", "Open talents"), OpenRoomTalents); }
 
         void OpenRoomTalents() { _setup.OpenSlots(_room.Side, false); }
 
@@ -330,11 +331,11 @@ namespace YxArena
 
         // ── 备战界面里改仙命 ─────────────────────────────────────────────────
 
-        void OnOpenTalents() { Context.Guard("打开仙命", OpenArenaTalents); }
+        void OnOpenTalents() { Context.Guard(Context.T("打开仙命", "Open talents"), OpenArenaTalents); }
 
         void OpenArenaTalents()
         {
-            if (!_session.InPlacement) { Ui.Toast("只能在备战界面改仙命"); return; }
+            if (!_session.InPlacement) { Ui.Toast(Context.T("只能在备战界面改仙命", "Talents can only be changed on the setup screen")); return; }
             _session.Autosave();      // 先把界面上的现状（牌、仙命计数）读回设置
             _setup.OpenSlots(_session.EditingIndex, true);
         }
@@ -356,7 +357,7 @@ namespace YxArena
                 if (slot >= 0) _setup.PickTalentDirect(_session.EditingIndex, slot, icon.transform as RectTransform);
                 else _setup.OpenSlots(_session.EditingIndex, true);
             }
-            catch (Exception e) { Context.Log.Error("点仙命图标 出错", e); }
+            catch (Exception e) { Context.Log.Error(Context.T("点仙命图标 出错", "Talent icon click failed"), e); }
             return false;
         }
 
@@ -368,13 +369,13 @@ namespace YxArena
 
         void DoEnter()
         {
-            Context.Log.Info("收到：进场");
+            Context.Log.Info(Context.T("收到：进场", "Received: enter"));
             _session.Enter();
         }
 
-        void OnOpenGallery() { Context.Guard("打开图鉴", _deal.OpenGallery); }
+        void OnOpenGallery() { Context.Guard(Context.T("打开图鉴", "Open gallery"), _deal.OpenGallery); }
 
-        void OnOpenSpecial() { Context.Guard("打开特殊牌", _deal.OpenSpecial); }
+        void OnOpenSpecial() { Context.Guard(Context.T("打开特殊牌", "Open special cards"), _deal.OpenSpecial); }
 
         // 输入框失焦也会触发 onEndEdit（比如去点搜出来的牌）：只有按了回车、或者文字变了才重新搜，免得面板被反复刷新。
         void OnSearch(string text)
@@ -384,7 +385,7 @@ namespace YxArena
             if (!enter && query == _lastQuery) return;
             _lastQuery = query;
             try { _deal.Search(query); }
-            catch (Exception e) { Context.Log.Error("搜牌 出错", e); }
+            catch (Exception e) { Context.Log.Error(Context.T("搜牌 出错", "Card search failed"), e); }
         }
 
         void OnNextSpecial()
@@ -393,9 +394,9 @@ namespace YxArena
             RefreshBar();
         }
 
-        void OnClearHand() { Context.Guard("清空手牌", _session.ClearHand); }
+        void OnClearHand() { Context.Guard(Context.T("清空手牌", "Clear hand"), _session.ClearHand); }
 
-        void OnFight() { Context.Guard("开打", DoFight); }
+        void OnFight() { Context.Guard(Context.T("开打", "Fight"), DoFight); }
 
         /// <summary>
         /// 开打。「破限」开着时，第一次开打（和场上有没处理过的牌时）要先把战斗代码改写成饱和算术——分帧做，做完自动开打。
@@ -410,7 +411,7 @@ namespace YxArena
                 if (!_overflow.Prepare(BoardCards()))
                 {
                     _fightPending = true;
-                    Ui.Toast("正在准备破限（只有第一次开打和上了新牌时需要），好了自动开打");
+                    Ui.Toast(Context.T("正在准备破限（只有第一次开打和上了新牌时需要），好了自动开打", "Preparing overflow (needed only on first fight and when new cards are added); will start automatically when ready"));
                     RefreshBar();
                     return;
                 }
@@ -443,7 +444,7 @@ namespace YxArena
             }
             _fightPending = false;
             RefreshBar();
-            if (_session.InPlacement) Context.Guard("开打", StartFight);
+            if (_session.InPlacement) Context.Guard(Context.T("开打", "Fight"), StartFight);
         }
 
         void OnNextLimitMode()
@@ -460,11 +461,11 @@ namespace YxArena
             RefreshBar();
         }
 
-        void OnLeave() { Context.Guard("回大厅", DoLeave); }
+        void OnLeave() { Context.Guard(Context.T("回大厅", "Back to lobby"), DoLeave); }
 
         void DoLeave()
         {
-            Context.Log.Info("收到：回大厅");
+            Context.Log.Info(Context.T("收到：回大厅", "Received: back to lobby"));
             _bar.Destroy();
             _nativeSwitch.Hide();
             _session.Leave();
@@ -490,7 +491,7 @@ namespace YxArena
             RefreshBar();
         }
 
-        void OnNextLevel() { Context.Guard("切换境界", DoNextLevel); }
+        void OnNextLevel() { Context.Guard(Context.T("切换境界", "Switch realm"), DoNextLevel); }
 
         void DoNextLevel()
         {
@@ -499,9 +500,9 @@ namespace YxArena
             RefreshBar();
         }
 
-        void OnToggleCollapsed() { Context.Guard("收起 / 展开", _bar.ToggleCollapsed); }
+        void OnToggleCollapsed() { Context.Guard(Context.T("收起 / 展开", "Collapse / expand"), _bar.ToggleCollapsed); }
 
-        void OnSwitchSide() { Context.Guard("切换编辑方", DoSwitchSide); }
+        void OnSwitchSide() { Context.Guard(Context.T("切换编辑方", "Switch editing side"), DoSwitchSide); }
 
         void DoSwitchSide()
         {
@@ -520,7 +521,7 @@ namespace YxArena
                 SaveConfig();
                 RefreshBar();
             }
-            catch (Exception e) { Context.Log.Error("改血量 出错", e); }
+            catch (Exception e) { Context.Log.Error(Context.T("改血量 出错", "Set HP failed"), e); }
         }
 
         void OnSetTiPo(string text)
@@ -531,7 +532,7 @@ namespace YxArena
                 _session.SetTiPo(text);
                 RefreshBar();
             }
-            catch (Exception e) { Context.Log.Error("改体魄 出错", e); }
+            catch (Exception e) { Context.Log.Error(Context.T("改体魄 出错", "Set body failed"), e); }
         }
 
         void OnSetTiPoMax(string text)
@@ -542,7 +543,7 @@ namespace YxArena
                 _session.SetTiPoMax(text);
                 RefreshBar();
             }
-            catch (Exception e) { Context.Log.Error("改体魄上限 出错", e); }
+            catch (Exception e) { Context.Log.Error(Context.T("改体魄上限 出错", "Set body max failed"), e); }
         }
     }
 }

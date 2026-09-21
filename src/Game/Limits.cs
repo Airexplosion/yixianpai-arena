@@ -32,7 +32,7 @@ namespace YxArena.Game
         {
             if (_ctx.Hooks.TryPrefix("BattleManager", "PlayBattle", 1, OnPlayBattle) != null) return;
             _failed = true;
-            _ctx.Log.Warn("解限不可用：上限保持原版");
+            _ctx.Log.Warn(_ctx.T("解限不可用：上限保持原版", "Uncap unavailable: caps stay vanilla"));
         }
 
         /// <summary>开打前调（备战界面里，战斗代码此刻没有在跑）：第一次用到时改写那两个方法。</summary>
@@ -44,23 +44,23 @@ namespace YxArena.Game
             {
                 _rounds = _ctx.Hooks.OverrideConstant("BattleExecuter", "Execute", 3, LimitModes.OriginalRounds, "MAX_HUI_HE_COUNT");
                 _hits = _ctx.Hooks.OverrideConstant("BattleCharacter", "Attack", 5, LimitModes.OriginalHits, "attackCount");
-                Describe("回合上限", _rounds);
-                Describe("攻击段数上限", _hits);
+                Describe(_ctx.T("回合上限", "round cap"), _rounds);
+                Describe(_ctx.T("攻击段数上限", "attack-hit cap"), _hits);
             }
             catch (Exception e)
             {
                 _failed = true;
-                _ctx.Log.Error("解限出错（上限保持原版）", e);
+                _ctx.Log.Error(_ctx.T("解限出错（上限保持原版）", "Uncap failed (caps stay vanilla)"), e);
             }
         }
 
         void Describe(string what, ConstOverride site)
         {
-            if (site.Applied) _ctx.Log.Info("解限：" + what + "已可覆盖（" + site.Report.Describe() + "）");
+            if (site.Applied) _ctx.Log.Info(_ctx.T("解限：", "Uncap: ") + what + _ctx.T("已可覆盖（", " is now overridable (") + site.Report.Describe() + _ctx.T("）", ")"));
             else
             {
                 _failed = true;
-                _ctx.Log.Warn("解限：" + what + "没改成，保持原版（" + site.Report.Describe() + "）");
+                _ctx.Log.Warn(_ctx.T("解限：", "Uncap: ") + what + _ctx.T("没改成，保持原版（", " unchanged, stays vanilla (") + site.Report.Describe() + _ctx.T("）", ")"));
             }
         }
 
@@ -87,7 +87,7 @@ namespace YxArena.Game
         /// <summary>状态行上的一小段；一切正常时为空。</summary>
         public string Status()
         {
-            return _failed ? "解限失败（见日志）" : "";
+            return _failed ? _ctx.T("解限失败（见日志）", "Uncap failed (see log)") : "";
         }
     }
 }

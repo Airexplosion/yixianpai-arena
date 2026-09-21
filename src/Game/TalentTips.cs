@@ -41,12 +41,12 @@ namespace YxArena.Game
             if (group.Complete) return;
             group.CancelAll();
             _broken = true;
-            _ctx.Log.Warn("仙命选择框的悬停说明不可用");
+            _ctx.Log.Warn(_ctx.T("仙命选择框的悬停说明不可用", "Talent picker hover tooltips unavailable"));
         }
 
         void Fail(string where, Exception e)
         {
-            if (!_broken) _ctx.Log.Error("仙命悬停说明 " + where + " 出错（之后不再显示说明）", e);
+            if (!_broken) _ctx.Log.Error(_ctx.T("仙命悬停说明 " + where + " 出错（之后不再显示说明）", "Talent hover tooltip " + where + " failed (tooltips disabled from now on)"), e);
             _broken = true;
         }
 

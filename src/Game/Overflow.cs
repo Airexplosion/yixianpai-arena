@@ -51,7 +51,7 @@ namespace YxArena.Game
             }
             catch (Exception e)
             {
-                Fail("准备", e);
+                Fail(_ctx.T("准备", "prepare"), e);
                 return true;
             }
         }
@@ -72,7 +72,7 @@ namespace YxArena.Game
             }
             catch (Exception e)
             {
-                Fail("改写", e);
+                Fail(_ctx.T("改写", "rewrite"), e);
                 return true;
             }
         }
@@ -84,19 +84,19 @@ namespace YxArena.Game
             if (!total.Ok)
             {
                 _broken = true;
-                _ctx.Log.Warn("破限没做成（战斗照常，数值到 21 亿仍会溢出）：" + total.Describe());
+                _ctx.Log.Warn(_ctx.T("破限没做成（战斗照常，数值到 21 亿仍会溢出）：", "Overflow prep didn't complete (fight continues; values still overflow past ~2.1 billion): ") + total.Describe());
                 return;
             }
             _plan.MarkDone(_jobTypes);
             _sites += total.Sites;
-            _ctx.Log.Info("破限：" + total.Describe());
+            _ctx.Log.Info(_ctx.T("破限：", "Overflow: ") + total.Describe());
         }
 
         void Fail(string where, Exception e)
         {
             _broken = true;
             _job = null;
-            _ctx.Log.Error("破限" + where + "出错（之后不再尝试，战斗照常）", e);
+            _ctx.Log.Error(_ctx.T("破限", "Overflow ") + where + _ctx.T("出错（之后不再尝试，战斗照常）", " failed (won't retry; fight continues)"), e);
         }
 
         /// <summary>一张牌即将被打出（CheckCardCost 的前置里，牌自己的代码还没开始跑）：它的类没处理过就现场处理。</summary>
@@ -112,25 +112,26 @@ namespace YxArena.Game
                 // 没有自己的类的牌走 FallbackCardAction（核心里已经处理过），这里会报「找不到热更类型」，不算错。
                 if (report.Ok) _sites += report.Sites;
             }
-            catch (Exception e) { Fail("处理 " + type + " ", e); }
+            catch (Exception e) { Fail(_ctx.T("处理 " + type + " ", "processing " + type + " "), e); }
         }
 
         public string Progress()
         {
             if (_job == null) return "";
-            return "破限准备中 " + OverflowPlan.Progress(_job.TypeIndex, _job.Types.Length);
+            return _ctx.T("破限准备中 ", "Preparing overflow ") + OverflowPlan.Progress(_job.TypeIndex, _job.Types.Length);
         }
 
         /// <summary>控制栏状态行上的一小段。</summary>
         public string Status()
         {
-            if (_broken) return "破限：失败（见日志）";
+            if (_broken) return _ctx.T("破限：失败（见日志）", "Overflow: failed (see log)");
             if (_job != null) return Progress();
-            if (!_plan.CoreDone) return Enabled ? "破限：首次开打时准备" : "破限：关";
-            string text = "破限：" + _sites.ToString(CultureInfo.InvariantCulture) + " 处";
+            if (!_plan.CoreDone) return Enabled ? _ctx.T("破限：首次开打时准备", "Overflow: prepared on first fight") : _ctx.T("破限：关", "Overflow: off");
+            string sites = _sites.ToString(CultureInfo.InvariantCulture);
+            string text = _ctx.T("破限：" + sites + " 处", "Overflow: " + sites + " sites");
             long overflows = SatMath.Overflows;
-            if (overflows > 0L) text += "，已拦下溢出 " + overflows.ToString(CultureInfo.InvariantCulture) + " 次";
-            if (!Enabled) text += "（已关：不再处理新牌）";
+            if (overflows > 0L) { string n = overflows.ToString(CultureInfo.InvariantCulture); text += _ctx.T("，已拦下溢出 " + n + " 次", ", caught " + n + " overflows"); }
+            if (!Enabled) text += _ctx.T("（已关：不再处理新牌）", " (off: no new cards processed)");
             return text;
         }
     }

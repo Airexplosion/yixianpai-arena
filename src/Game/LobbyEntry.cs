@@ -20,8 +20,8 @@ namespace YxArena.Game
         const string PartName = "SinglePlayerModePart";
         const string ItemScript = "SinglePlayerModeItem";
         const string CloneName = "YxArenaEntry";
-        const string Title = "练习场";
-        const string Hint = "本地练习：自选卡牌，打木人";
+        static string Title { get { return Loc.T("练习场", "Arena"); } }
+        static string Hint { get { return Loc.T("本地练习：自选卡牌，打木人", "Local practice: pick cards, fight a dummy"); } }
 
         readonly ModContext _ctx;
         readonly Action _enter;
@@ -42,7 +42,7 @@ namespace YxArena.Game
         public void Install()
         {
             _hooked = _ctx.Hooks.TryPrefix(ItemScript, "OnClick", 1, OnItemClick) != null;
-            if (!_hooked) _ctx.Log.Warn("单人模式页里的入口不可用：用 CTRL+ALT+1 进练习场");
+            if (!_hooked) _ctx.Log.Warn(_ctx.T("单人模式页里的入口不可用：用 CTRL+ALT+1 进练习场", "The Single Player entry is unavailable: use CTRL+ALT+1 to enter the arena"));
         }
 
         bool OnItemClick(HookContext h)
@@ -69,7 +69,7 @@ namespace YxArena.Game
             catch (Exception e)
             {
                 _gaveUp = true;
-                _ctx.Log.Warn("往单人模式页加入口失败，不再重试（用 CTRL+ALT+1 进练习场）：" + e.Message);
+                _ctx.Log.Warn(_ctx.T("往单人模式页加入口失败，不再重试（用 CTRL+ALT+1 进练习场）：", "Failed to add the entry to the Single Player page; won't retry (use CTRL+ALT+1 to enter the arena): ") + e.Message);
             }
         }
 
@@ -108,7 +108,7 @@ namespace YxArena.Game
             _clone.SetActive(true);
             _clone.transform.SetAsLastSibling();
             KeepTexts();
-            if (!_announced) _ctx.Log.Info("单人模式页里已加入「练习场」入口（克隆自 " + source.name + "）");
+            if (!_announced) _ctx.Log.Info(_ctx.T("单人模式页里已加入「练习场」入口（克隆自 ", "Added the \"Arena\" entry to the Single Player page (cloned from ") + source.name + _ctx.T("）", ")"));
             _announced = true;
         }
 

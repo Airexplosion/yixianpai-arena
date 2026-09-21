@@ -43,7 +43,9 @@ namespace YxArena.Views
         const int GroupExclusive = 9;
 
         static readonly string[] SlotNames = { "炼气", "筑基", "金丹", "元婴", "化神" };
+        static readonly string[] SlotNamesEn = { "Qi Refining", "Foundation", "Golden Core", "Nascent Soul", "Spirit Severing" };
         static readonly string[] LevelTags = { "", "炼", "筑", "金", "元", "化", "返" };
+        static readonly string[] LevelTagsEn = { "", "Q", "F", "G", "N", "S", "V" };
 
         /// <summary>带着一个序号的回调（按钮 / 输入框的委托不带参数，用它把「第几个槽」「哪个 id」带进去）。</summary>
         sealed class Bound
@@ -157,7 +159,7 @@ namespace YxArena.Views
 
         static string TalentName(int id)
         {
-            if (id <= 0) return "（空）";
+            if (id <= 0) return Loc.T("（空）", "(empty)");
             try { return TranslateUtil.GetTalentTranslate(id); }
             catch (Exception) { return N(id); }
         }
@@ -174,7 +176,7 @@ namespace YxArena.Views
                 TalentConfig c = configs[i];
                 _talentIds[i] = c.id;
                 int level = (int)c.level;
-                string tag = level > 0 && level < LevelTags.Length ? "［" + LevelTags[level] + "］" : "";
+                string tag = level > 0 && level < LevelTags.Length ? Loc.T("［" + LevelTags[level] + "］", " [" + LevelTagsEn[level] + "]") : "";
                 _talentNames[i] = TalentName(c.id) + tag;
                 _talentGroups[i] = c.charId != 0 ? GroupExclusive : (int)c.sect;
             }
@@ -198,9 +200,9 @@ namespace YxArena.Views
 
         static string GroupName(int group)
         {
-            if (group == ListFilter.AnyGroup) return "全部";
-            if (group == GroupGeneral) return "通用";
-            if (group == GroupExclusive) return "角色专属";
+            if (group == ListFilter.AnyGroup) return Loc.T("全部", "All");
+            if (group == GroupGeneral) return Loc.T("通用", "General");
+            if (group == GroupExclusive) return Loc.T("角色专属", "Exclusive");
             try { return TranslateUtil.GetSectTranslate(group); }
             catch (Exception) { return N(group); }
         }
@@ -232,40 +234,42 @@ namespace YxArena.Views
             Transform t = _root.transform;
             ArenaSide side = Side;
             float y = -Pad;
-            _ui.Label(t, "title", "仙命（" + side.Name + "）", new Vector2(Pad, y), new Vector2(420f, Row), 26f);
-            _ui.TextButton(t, "done", "完成", new Vector2(Width - Pad - 110f, y), new Vector2(110f, 40f), Close);
+            _ui.Label(t, "title", Loc.T("仙命（" + side.Name + "）", "Talents (" + side.Name + ")"), new Vector2(Pad, y), new Vector2(420f, Row), 26f);
+            _ui.TextButton(t, "done", Loc.T("完成", "Done"), new Vector2(Width - Pad - 110f, y), new Vector2(110f, 40f), Close);
             y -= Row + 4f;
-            _ui.Label(t, "hint", "点名字选仙命（所有仙命，不限角色）。「计数」是这个仙命攒的层数 / 次数在开打时已经有多少，不需要就留 0。",
+            _ui.Label(t, "hint", Loc.T("点名字选仙命（所有仙命，不限角色）。「计数」是这个仙命攒的层数 / 次数在开打时已经有多少，不需要就留 0。",
+                "Click a name to pick a talent (all talents, any character). \"Count\" is how many stacks / triggers it already has when the fight starts; leave 0 if not needed."),
                 new Vector2(Pad, y), new Vector2(Width - Pad * 2f, Row), 17f);
             y -= Row;
             if (_allowCharacter)
             {
-                _ui.Label(t, "charCaption", "角色", new Vector2(Pad, y - 6f), new Vector2(90f, Row), 22f);
+                _ui.Label(t, "charCaption", Loc.T("角色", "Character"), new Vector2(Pad, y - 6f), new Vector2(90f, Row), 22f);
                 _ui.TextButton(t, "char", CharacterName(side.CharacterId), new Vector2(Pad + 96f, y), new Vector2(380f, 40f), Bind(KindPickCharacter, 0).Run);
-                _ui.Label(t, "charHint", "换角色会换成它自带的仙命，皮肤回到默认", new Vector2(Pad + 490f, y - 8f), new Vector2(380f, Row), 16f);
+                _ui.Label(t, "charHint", Loc.T("换角色会换成它自带的仙命，皮肤回到默认", "Switching character loads its innate talents; skin resets to default"), new Vector2(Pad + 490f, y - 8f), new Vector2(380f, Row), 16f);
                 y -= Row + 4f;
             }
             for (int i = 0; i < ArenaSide.TalentSlots; i++)
             {
-                _ui.Label(t, "slot", SlotNames[i], new Vector2(Pad, y - 6f), new Vector2(90f, Row), 22f);
+                _ui.Label(t, "slot", Loc.T(SlotNames[i], SlotNamesEn[i]), new Vector2(Pad, y - 6f), new Vector2(90f, Row), 22f);
                 _ui.TextButton(t, "talent", TalentName(side.Talents[i]), new Vector2(Pad + 96f, y), new Vector2(380f, 40f), Bind(KindPickSlot, i).Run);
                 _ui.TextButton(t, "clear", "×", new Vector2(Pad + 484f, y), new Vector2(44f, 40f), Bind(KindClearSlot, i).Run);
                 if (side.Talents[i] != 0)
                 {
-                    _ui.Label(t, "valueCaption", "计数", new Vector2(Pad + 552f, y - 6f), new Vector2(54f, Row), 20f);
+                    _ui.Label(t, "valueCaption", Loc.T("计数", "Count"), new Vector2(Pad + 552f, y - 6f), new Vector2(54f, Row), 20f);
                     UiInput value = _ui.NumberInput(t, "value", new Vector2(Pad + 610f, y), new Vector2(130f, 40f), 6, Bind(KindSlotValue, i).RunText);
                     value.Show(N(side.TalentValues[i]));
                 }
                 y -= Row;
             }
             y -= 10f;
-            _ui.Label(t, "fateCaption", "天衍仙命", new Vector2(Pad, y - 6f), new Vector2(96f, Row), 22f);
-            _ui.TextButton(t, "fates", "选择…（已选 " + N(side.Fates.Count) + "）", new Vector2(Pad + 96f, y), new Vector2(380f, 40f), OnOpenFates);
+            _ui.Label(t, "fateCaption", Loc.T("天衍仙命", "Fates"), new Vector2(Pad, y - 6f), new Vector2(96f, Row), 22f);
+            string fateCount = N(side.Fates.Count);
+            _ui.TextButton(t, "fates", Loc.T("选择…（已选 " + fateCount + "）", "Choose… (" + fateCount + " picked)"), new Vector2(Pad + 96f, y), new Vector2(380f, 40f), OnOpenFates);
             EnsureFates();
             var chosen = new System.Text.StringBuilder();
             for (int i = 0; i < side.Fates.Count; i++)
             {
-                if (i > 0) chosen.Append("、");
+                if (i > 0) chosen.Append(Loc.T("、", ", "));
                 chosen.Append(FateName(side.Fates[i]));
             }
             _ui.Label(t, "fateList", chosen.ToString(), new Vector2(Pad, y - Row), new Vector2(Width - Pad * 2f, 80f), 18f);
@@ -288,12 +292,14 @@ namespace YxArena.Views
             Transform t = _root.transform;
             ArenaSide side = Side;
             float y = -Pad;
-            string title = talents ? "全仙命表 → " + SlotNames[_slot] + "（" + side.Name + "）" : "天衍仙命（" + side.Name + "）　已选 " + N(side.Fates.Count);
+            string title = talents
+                ? Loc.T("全仙命表 → " + SlotNames[_slot] + "（" + side.Name + "）", "All talents → " + SlotNamesEn[_slot] + " (" + side.Name + ")")
+                : Loc.T("天衍仙命（" + side.Name + "）　已选 " + N(side.Fates.Count), "Fates (" + side.Name + ")  " + N(side.Fates.Count) + " picked");
             _ui.Label(t, "title", title, new Vector2(Pad, y), new Vector2(430f, Row), 24f);
-            _ui.Label(t, "searchCaption", "搜名字", new Vector2(Pad + 440f, y - 4f), new Vector2(70f, Row), 20f);
+            _ui.Label(t, "searchCaption", Loc.T("搜名字", "Search"), new Vector2(Pad + 440f, y - 4f), new Vector2(70f, Row), 20f);
             UiInput search = _ui.TextInput(t, "search", new Vector2(Pad + 514f, y), new Vector2(220f, 40f), 16, OnFilter);
             search.Show(_filter);
-            _ui.TextButton(t, "back", "返回", new Vector2(Width - Pad - 110f, y), new Vector2(110f, 40f), OnBackToSlots);
+            _ui.TextButton(t, "back", Loc.T("返回", "Back"), new Vector2(Width - Pad - 110f, y), new Vector2(110f, 40f), OnBackToSlots);
             y -= Row + 4f;
 
             if (talents)
@@ -324,10 +330,12 @@ namespace YxArena.Views
                     new Vector2(CellWidth, 40f), Bind(talents ? KindChooseTalent : KindToggleFate, ids[index]).Run);
             }
             float bottom = -(Height - Pad - 44f);
-            _ui.TextButton(t, "prev", "◀ 上一页", new Vector2(Pad, bottom), new Vector2(130f, 44f), OnPrev);
-            string pageText = N(_pageIndex + 1) + " / " + N(ListFilter.PageCount(matches.Length, pageSize)) + "　共 " + N(matches.Length) + " 个";
+            _ui.TextButton(t, "prev", Loc.T("◀ 上一页", "◀ Prev"), new Vector2(Pad, bottom), new Vector2(130f, 44f), OnPrev);
+            string pageNums = N(_pageIndex + 1) + " / " + N(ListFilter.PageCount(matches.Length, pageSize));
+            string total = N(matches.Length);
+            string pageText = Loc.T(pageNums + "　共 " + total + " 个", pageNums + "  " + total + " total");
             _ui.Label(t, "page", pageText, new Vector2(Pad + 146f, bottom - 8f), new Vector2(260f, Row), 20f);
-            _ui.TextButton(t, "next", "下一页 ▶", new Vector2(Pad + 410f, bottom), new Vector2(130f, 44f), OnNext);
+            _ui.TextButton(t, "next", Loc.T("下一页 ▶", "Next ▶"), new Vector2(Pad + 410f, bottom), new Vector2(130f, 44f), OnNext);
         }
 
         // ── 游戏自己的选择框（SelectInfoPanel）───────────────────────────────────
@@ -375,7 +383,7 @@ namespace YxArena.Views
             catch (Exception e)
             {
                 _nativeBroken = true;
-                _ctx.Log.Warn("游戏自己的选择框打不开，改用自绘的列表：" + e.Message);
+                _ctx.Log.Warn(Loc.T("游戏自己的选择框打不开，改用自绘的列表：", "Game's own picker won't open; falling back to the custom list: ") + e.Message);
                 return false;
             }
         }
@@ -402,7 +410,7 @@ namespace YxArena.Views
                 else return;
                 Notify();
             }
-            catch (Exception e) { _ctx.Log.Error("仙命小窗：选仙命出错", e); }
+            catch (Exception e) { _ctx.Log.Error(Loc.T("仙命小窗：选仙命出错", "Talent window: pick talent failed"), e); }
         }
 
         void OnNativeCharacter(int id)
@@ -415,7 +423,7 @@ namespace YxArena.Views
                 Side.SetCharacter(id, 0, 0, ArenaRoom.InnateTalents(id));
                 Notify();
             }
-            catch (Exception e) { _ctx.Log.Error("仙命小窗：换角色出错", e); }
+            catch (Exception e) { _ctx.Log.Error(Loc.T("仙命小窗：换角色出错", "Talent window: switch character failed"), e); }
         }
 
         void PickSlot(int slot)
@@ -449,7 +457,7 @@ namespace YxArena.Views
                         PickSlot(value);
                         return;
                     case KindPickCharacter:
-                        if (!OpenNativeBox(SelectInfoType.角色, OnNativeCharacter)) Ui.Toast("游戏的角色选择框打不开；换角色请回大厅的选英雄界面");
+                        if (!OpenNativeBox(SelectInfoType.角色, OnNativeCharacter)) Ui.Toast(Loc.T("游戏的角色选择框打不开；换角色请回大厅的选英雄界面", "Game's character picker won't open; switch characters from the lobby's hero-select screen"));
                         return;
                     case KindClearSlot:
                         Side.SetTalent(value, 0);
@@ -457,7 +465,7 @@ namespace YxArena.Views
                         break;
                     case KindSlotValue:
                         if (text == null || text.Trim() == N(Side.TalentValues[value])) return;
-                        if (!Side.SetTalentValue(value, text)) Ui.Toast("计数要填 0–999999 的整数");
+                        if (!Side.SetTalentValue(value, text)) Ui.Toast(Loc.T("计数要填 0–999999 的整数", "Count must be an integer 0–999999"));
                         Notify();
                         break;
                     case KindChooseTalent:
@@ -479,8 +487,8 @@ namespace YxArena.Views
             }
             catch (Exception e)
             {
-                _ctx.Log.Error("仙命小窗：操作出错", e);
-                Ui.Toast("操作失败，详见日志");
+                _ctx.Log.Error(Loc.T("仙命小窗：操作出错", "Talent window: operation failed"), e);
+                Ui.Toast(Loc.T("操作失败，详见日志", "Operation failed; see log"));
             }
         }
 

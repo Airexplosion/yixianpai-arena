@@ -136,15 +136,17 @@ namespace YxArena.Game
         bool OnReplacePrefix(HookContext h)
         {
             if (!ArenaSession.Active) return true;
-            _ctx.Log.Warn("练习场里走到了换牌（ReplaceCardAsync）——换牌区应该已经隐藏，这一次会向服务器发包并失败");
+            _ctx.Log.Warn(_ctx.T("练习场里走到了换牌（ReplaceCardAsync）——换牌区应该已经隐藏，这一次会向服务器发包并失败", "Reached card replace (ReplaceCardAsync) in the arena — the replace area should have been hidden; this will send a packet to the server and fail"));
             return true;
         }
 
         public string Summary()
         {
-            return "移牌 " + Moves.ToString(CultureInfo.InvariantCulture)
-                   + "  炼化 " + Refines.ToString(CultureInfo.InvariantCulture)
-                   + "  拦下的请求 " + BlockedRequests.ToString(CultureInfo.InvariantCulture);
+            string moves = Moves.ToString(CultureInfo.InvariantCulture);
+            string refines = Refines.ToString(CultureInfo.InvariantCulture);
+            string blocked = BlockedRequests.ToString(CultureInfo.InvariantCulture);
+            return _ctx.T("移牌 " + moves + "  炼化 " + refines + "  拦下的请求 " + blocked,
+                          "Moves " + moves + "  Refines " + refines + "  Blocked " + blocked);
         }
     }
 }

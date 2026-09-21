@@ -61,11 +61,11 @@ namespace YxArena.Game
             if (!_hooked)
             {
                 room.CancelAll();
-                _ctx.Log.Warn("选英雄界面的钩子不全（" + room.Missing + "），练习场直接用上次的角色进场");
+                _ctx.Log.Warn(_ctx.T("选英雄界面的钩子不全（", "Hero-select hooks incomplete (") + room.Missing + _ctx.T("），练习场直接用上次的角色进场", "); the arena enters with the last-used character"));
                 return;
             }
             if (_ctx.Hooks.TryPrefix("TalentItem", "OnClick", 1, OnTalentClick) == null)
-                _ctx.Log.Warn("仙命图标的点击钩子没挂上：选英雄界面上的仙命只能用角色自带的");
+                _ctx.Log.Warn(_ctx.T("仙命图标的点击钩子没挂上：选英雄界面上的仙命只能用角色自带的", "Talent icon click hook not installed: talents on the hero-select screen are limited to the character's innate ones"));
         }
 
         // ── 打开 / 关闭 ────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ namespace YxArena.Game
             LobbyPanel lobby = ILRPanelBase.FindILRPanel<LobbyPanel>();
             if (lobby == null) return;
             _panel = lobby.FindILRSubPanelRuntime<SinglePlayerRoomPanel>();
-            if (_panel == null) { Ui.Toast("没能打开选英雄界面"); return; }
+            if (_panel == null) { Ui.Toast(_ctx.T("没能打开选英雄界面", "Couldn't open the hero-select screen")); return; }
             _savedLastCharacter = SettingsManager.GetLastCharacterId(GameMode.RogueMode);
             _open = true;          // 先立旗：ShowPart 里就会走到 RogueModePart.OnShow 的钩子
             _seenShown = false;
@@ -114,7 +114,7 @@ namespace YxArena.Game
         {
             if (!_open) return;
             try { if (_panel != null && _panel.panel != null && _panel.panel.isShow) _panel.Hide(); }
-            catch (Exception e) { _ctx.Log.Warn("关闭选英雄界面出错：" + e.Message); }
+            catch (Exception e) { _ctx.Log.Warn(_ctx.T("关闭选英雄界面出错：", "Error closing the hero-select screen: ") + e.Message); }
             Closed();
         }
 
@@ -127,7 +127,7 @@ namespace YxArena.Game
                 // 抽屉把「上次用的角色」记在了秘境名下：放回去，别影响玩家真去打秘境时的默认角色。
                 if (_savedLastCharacter != 0) SettingsManager.SetLastCharacterId(_savedLastCharacter, GameMode.RogueMode);
             }
-            catch (Exception e) { _ctx.Log.Warn("还原选英雄界面出错：" + e.Message); }
+            catch (Exception e) { _ctx.Log.Warn(_ctx.T("还原选英雄界面出错：", "Error restoring the hero-select screen: ") + e.Message); }
             _session.Persist();
         }
 
@@ -147,7 +147,7 @@ namespace YxArena.Game
             }
             catch (Exception e)
             {
-                _ctx.Log.Error("选英雄界面同步出错，已关闭", e);
+                _ctx.Log.Error(_ctx.T("选英雄界面同步出错，已关闭", "Hero-select sync failed; closed"), e);
                 Close();
             }
         }
@@ -241,7 +241,7 @@ namespace YxArena.Game
                 Close();
                 _enter();
             }
-            catch (Exception e) { _ctx.Log.Error("从选英雄界面进场出错", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("从选英雄界面进场出错", "Entering from the hero-select screen failed"), e); }
             return false;
         }
 
@@ -255,7 +255,7 @@ namespace YxArena.Game
             if (slot < 0 || slot >= ArenaSide.TalentSlots) return true;
             h.Skip(null);
             try { _pickTalent(slot, item.transform as RectTransform); }
-            catch (Exception e) { _ctx.Log.Error("打开全仙命表出错", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("打开全仙命表出错", "Opening the all-talents list failed"), e); }
             return false;
         }
     }

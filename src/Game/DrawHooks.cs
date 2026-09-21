@@ -49,7 +49,7 @@ namespace YxArena.Game
             Try("CardActionBase", "ExecuteEffect", 3, OnExecuteEffect);
             Try("BattleCharacter", "GetNextRandomValue", 1, OnNextRandomValue);
             Try("BattleCharacter", "GetNextParam", 0, OnNextParam);
-            if (!Enabled) _ctx.Log.Warn("本地随机数没有启用：随机出牌 / 随机负面状态 / X～Y 数值这几类牌在练习场里会不正常");
+            if (!Enabled) _ctx.Log.Warn(_ctx.T("本地随机数没有启用：随机出牌 / 随机负面状态 / X～Y 数值这几类牌在练习场里会不正常", "Local RNG not enabled: random-play / random-debuff / X–Y value cards will misbehave in the arena"));
         }
 
         void Try(string type, string method, int paramCount, Func<HookContext, bool> handler)
@@ -60,8 +60,10 @@ namespace YxArena.Game
 
         public string Summary()
         {
-            if (!Enabled || _planner == null) return Enabled ? "" : "本地随机数未启用";
-            return "取值 " + _planner.RawDraws.ToString(CultureInfo.InvariantCulture) + " / " + _planner.ValueDraws.ToString(CultureInfo.InvariantCulture);
+            if (!Enabled || _planner == null) return Enabled ? "" : _ctx.T("本地随机数未启用", "Local RNG off");
+            string raw = _planner.RawDraws.ToString(CultureInfo.InvariantCulture);
+            string val = _planner.ValueDraws.ToString(CultureInfo.InvariantCulture);
+            return _ctx.T("取值 " + raw + " / " + val, "Draws " + raw + " / " + val);
         }
 
         // ── 牌的配置 → 纯数据 ────────────────────────────────────────────────
@@ -77,7 +79,7 @@ namespace YxArena.Game
                 _facts[all[i].Id] = all[i];
             }
             _planner = new DrawPlanner(all);
-            _ctx.Log.Info("本地随机数：已载入 " + all.Length.ToString(CultureInfo.InvariantCulture) + " 张牌的配置");
+            _ctx.Log.Info(_ctx.T("本地随机数：已载入 " + all.Length.ToString(CultureInfo.InvariantCulture) + " 张牌的配置", "Local RNG: loaded configs for " + all.Length.ToString(CultureInfo.InvariantCulture) + " cards"));
         }
 
         public static CardFacts ToFacts(CardConfig c)

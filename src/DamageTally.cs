@@ -10,7 +10,7 @@ namespace YxArena
     public sealed class DamageTally
     {
         const int MaxCards = 64;
-        const string Placeholder = "（开场 / 其他）";
+        static string Placeholder { get { return Loc.T("（开场 / 其他）", "(start / other)"); } }
 
         sealed class SideTally
         {
@@ -132,10 +132,10 @@ namespace YxArena
             SideTally s = Side(side);
             if (s == null) return "";
             var sb = new StringBuilder();
-            sb.Append(sideName).Append("　总伤害 ").Append(Group(s.Damage)).Append("（掉血 ").Append(Group(s.HpLoss)).Append("）");
-            if (s.MaxHit > 0L) sb.Append((char)10).Append("最大一击 ").Append(Group(s.MaxHit)).Append("（").Append(s.MaxHitCard).Append("）");
-            sb.Append((char)10).Append("第 ").Append(N(s.Turns)).Append(" 回合 ").Append(Group(s.TurnDamage));
-            if (s.LastCard.Length > 0) sb.Append("　上一张 ").Append(s.LastCard).Append(" ").Append(Group(s.LastCardDamage));
+            sb.Append(sideName).Append(Loc.T("　总伤害 ", "  Total dmg ")).Append(Group(s.Damage)).Append(Loc.T("（掉血 ", " (HP lost ")).Append(Group(s.HpLoss)).Append(Loc.T("）", ")"));
+            if (s.MaxHit > 0L) sb.Append((char)10).Append(Loc.T("最大一击 ", "Max hit ")).Append(Group(s.MaxHit)).Append(Loc.T("（", " (")).Append(s.MaxHitCard).Append(Loc.T("）", ")"));
+            sb.Append((char)10).Append(Loc.T("第 ", "Round ")).Append(N(s.Turns)).Append(Loc.T(" 回合 ", " dmg ")).Append(Group(s.TurnDamage));
+            if (s.LastCard.Length > 0) sb.Append(Loc.T("　上一张 ", "  Last ")).Append(s.LastCard).Append(" ").Append(Group(s.LastCardDamage));
 
             var order = new int[s.Count];
             for (int i = 0; i < s.Count; i++) order[i] = i;
@@ -153,7 +153,7 @@ namespace YxArena
                 if (s.Totals[slot] <= 0L) continue;
                 sb.Append((char)10).Append("  ").Append(s.Names[slot]);
                 if (s.Plays[slot] > 1) sb.Append(" ×").Append(N(s.Plays[slot]));
-                sb.Append("　").Append(Group(s.Totals[slot]));
+                sb.Append(Loc.T("　", "  ")).Append(Group(s.Totals[slot]));
                 shown++;
             }
             return sb.ToString();

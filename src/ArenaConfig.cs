@@ -9,6 +9,7 @@ namespace YxArena
         public const int DefaultDummyHp = 300;
 
         static readonly string[] LevelNames = { "炼气", "筑基", "金丹", "元婴", "化神", "返虚" };
+        static readonly string[] LevelNamesEn = { "Qi Refining", "Foundation", "Golden Core", "Nascent Soul", "Spirit Severing", "Void Return" };
 
         public int CharacterId = DefaultCharacterId;
         public int Level = MinLevel;
@@ -40,16 +41,17 @@ namespace YxArena
 
         public static string LevelName(int level)
         {
-            return level >= MinLevel && level <= MaxLevel ? LevelNames[level - 1] : "?";
+            if (level < MinLevel || level > MaxLevel) return "?";
+            return Loc.T(LevelNames[level - 1], LevelNamesEn[level - 1]);
         }
 
         public static string RarityName(int rarity)
         {
             switch (rarity)
             {
-                case 0: return "1 级";
-                case 1: return "2 级";
-                case 2: return "3 级";
+                case 0: return Loc.T("1 级", "Lv.1");
+                case 1: return Loc.T("2 级", "Lv.2");
+                case 2: return Loc.T("3 级", "Lv.3");
                 default: return "?";
             }
         }

@@ -50,8 +50,8 @@ namespace YxArena.Game
             _ctx = ctx;
             _cfg = cfg;
             _hooks = hooks;
-            _sides[0] = new ArenaSide("我", _cfg.CharacterId, _cfg.Level, 0);
-            _sides[1] = new ArenaSide("木人", ArenaConfig.DefaultCharacterId, ArenaConfig.MinLevel, _cfg.DummyHp);
+            _sides[0] = new ArenaSide(ctx.T("我", "Me"), _cfg.CharacterId, _cfg.Level, 0);
+            _sides[1] = new ArenaSide(ctx.T("木人", "Dummy"), ArenaConfig.DefaultCharacterId, ArenaConfig.MinLevel, _cfg.DummyHp);
             LoadSides();
             s_current = this;
         }
@@ -126,7 +126,7 @@ namespace YxArena.Game
             for (int i = 0; i < 2; i++)
             {
                 string text = _ctx.Data.Get<string>(SaveKeyPrefix + N(i), "");
-                if (text.Length > 0 && !_sides[i].Load(text)) _ctx.Log.Warn("练习场存档读不出来，" + _sides[i].Name + "用默认设置");
+                if (text.Length > 0 && !_sides[i].Load(text)) _ctx.Log.Warn(_ctx.T("练习场存档读不出来，", "Arena save unreadable; ") + _sides[i].Name + _ctx.T("用默认设置", " uses default settings"));
             }
         }
 
@@ -136,7 +136,7 @@ namespace YxArena.Game
             {
                 for (int i = 0; i < 2; i++) _ctx.Data.Set(SaveKeyPrefix + N(i), _sides[i].Save());
             }
-            catch (Exception e) { _ctx.Log.Warn("练习场存档失败：" + e.Message); }
+            catch (Exception e) { _ctx.Log.Warn(_ctx.T("练习场存档失败：", "Arena save failed: ") + e.Message); }
         }
 
         /// <summary>备战界面里隔一会儿存一次：玩家可能用游戏自己的方式直接回大厅，那时已经读不到界面了。</summary>
@@ -144,7 +144,7 @@ namespace YxArena.Game
         {
             if (!InPlacement) return;
             try { if (Capture()) Persist(); }
-            catch (Exception e) { _ctx.Log.Warn("练习场自动存档失败：" + e.Message); }
+            catch (Exception e) { _ctx.Log.Warn(_ctx.T("练习场自动存档失败：", "Arena autosave failed: ") + e.Message); }
         }
 
         /// <summary>某一方（0 = 我，1 = 对手）。设置窗直接改它，改完调 <see cref="Persist"/>。</summary>
@@ -168,11 +168,11 @@ namespace YxArena.Game
 
         public void Enter()
         {
-            if (_state != StateIdle) { Say("已经在练习场里了"); return; }
-            if (!_hooks.Complete) { Say("离线保护不完整，禁止进场（没挂上：" + _hooks.Missing + "）"); return; }
+            if (_state != StateIdle) { Say(_ctx.T("已经在练习场里了", "Already in the arena")); return; }
+            if (!_hooks.Complete) { Say(_ctx.T("离线保护不完整，禁止进场（没挂上：", "Offline protection incomplete; entering is blocked (missing: ") + _hooks.Missing + _ctx.T("）", ")")); return; }
             string guard = RoomGuard.Reason();
             if (guard != null) { Say(guard); return; }
-            if (SceneLoader.isLoading || SceneLoader.currentSceneName != "Lobby") { Say("只能从大厅进练习场"); return; }
+            if (SceneLoader.isLoading || SceneLoader.currentSceneName != "Lobby") { Say(_ctx.T("只能从大厅进练习场", "The arena can only be entered from the lobby")); return; }
             _live[0] = null;
             _live[1] = null;
             _editing = 0;
@@ -182,7 +182,7 @@ namespace YxArena.Game
             _settle = 0;
             _deadline = Time.realtimeSinceStartup + EnterTimeoutSeconds;
             SceneLoader.LoadScene("Battle");
-            _ctx.Log.Info("进场：已请求加载 Battle 场景");
+            _ctx.Log.Info(_ctx.T("进场：已请求加载 Battle 场景", "Enter: requested loading the Battle scene"));
         }
 
         public void Tick()
@@ -193,11 +193,11 @@ namespace YxArena.Game
 
         void TickEntering()
         {
-            if (RoomGuard.Reason() != null) { Abort("进场途中进了房间，练习场退出"); return; }
+            if (RoomGuard.Reason() != null) { Abort(_ctx.T("进场途中进了房间，练习场退出", "Entered a room mid-load; leaving the arena")); return; }
             if (!BattleReady())
             {
                 _settle = 0;
-                if (Time.realtimeSinceStartup > _deadline) Abort("等战斗场景超时，练习场退出");
+                if (Time.realtimeSinceStartup > _deadline) Abort(_ctx.T("等战斗场景超时，练习场退出", "Timed out waiting for the battle scene; leaving the arena"));
                 return;
             }
             _settle++;
@@ -206,12 +206,12 @@ namespace YxArena.Game
             {
                 Present();
                 _state = StateReady;
-                _ctx.Log.Info("进场：本地对局状态已喂给 Refresh");
+                _ctx.Log.Info(_ctx.T("进场：本地对局状态已喂给 Refresh", "Enter: local match state handed to Refresh"));
             }
             catch (Exception e)
             {
-                _ctx.Log.Error("立起备战界面失败", e);
-                Abort("立起备战界面失败，详见日志");
+                _ctx.Log.Error(_ctx.T("立起备战界面失败", "Failed to stand up the setup screen"), e);
+                Abort(_ctx.T("立起备战界面失败，详见日志", "Failed to stand up the setup screen; see log"));
             }
         }
 
@@ -240,7 +240,7 @@ namespace YxArena.Game
         {
             if (_state == StateIdle || _state == StateEntering) return;
             _state = StateIdle;
-            _ctx.Log.Info("已回到大厅，练习场会话结束");
+            _ctx.Log.Info(_ctx.T("已回到大厅，练习场会话结束", "Back in the lobby; arena session ended"));
         }
 
         // ── 本地对局状态 ──────────────────────────────────────────────────
@@ -396,12 +396,12 @@ namespace YxArena.Game
                     if (area.gameObject.activeSelf) area.gameObject.SetActive(false);
                     return;
                 }
-                if (!_warnedReplace) _ctx.Log.Warn("没找到换牌区，没能隐藏它——别往换牌区拖牌");
+                if (!_warnedReplace) _ctx.Log.Warn(_ctx.T("没找到换牌区，没能隐藏它——别往换牌区拖牌", "Couldn't find the replace area to hide it — don't drag cards into it"));
                 _warnedReplace = true;
             }
             catch (Exception e)
             {
-                if (!_warnedReplace) _ctx.Log.Warn("隐藏换牌区失败：" + e.Message);
+                if (!_warnedReplace) _ctx.Log.Warn(_ctx.T("隐藏换牌区失败：", "Failed to hide the replace area: ") + e.Message);
                 _warnedReplace = true;
             }
         }
@@ -495,40 +495,40 @@ namespace YxArena.Game
         /// <summary>往正在编辑的一方的手牌末尾发一张牌。成功返回 true。</summary>
         public bool Deal(int cardId)
         {
-            if (!InPlacement) { Say("只能在备战界面发牌"); return false; }
+            if (!InPlacement) { Say(_ctx.T("只能在备战界面发牌", "Cards can only be dealt on the setup screen")); return false; }
             try
             {
                 if (!Capture()) return false;
                 ArenaSide side = _sides[_editing];
-                if (side.Hand.Count >= CardIds.HandLimit) { Say("手牌满了（" + N(CardIds.HandLimit) + " 张）"); return false; }
+                if (side.Hand.Count >= CardIds.HandLimit) { string limit = N(CardIds.HandLimit); Say(_ctx.T("手牌满了（" + limit + " 张）", "Hand is full (" + limit + " cards)")); return false; }
                 side.Hand.Add(cardId);
                 PushCards();
                 return true;
             }
             catch (Exception e)
             {
-                _ctx.Log.Error("发牌失败 id=" + N(cardId), e);
+                _ctx.Log.Error(_ctx.T("发牌失败 id=", "Deal failed id=") + N(cardId), e);
                 return false;
             }
         }
 
         public void ClearHand()
         {
-            if (!InPlacement) { Say("只能在备战界面清手牌"); return; }
+            if (!InPlacement) { Say(_ctx.T("只能在备战界面清手牌", "The hand can only be cleared on the setup screen")); return; }
             try
             {
                 if (!Capture()) return;
                 _sides[_editing].Hand.Clear();
                 PushCards();
             }
-            catch (Exception e) { _ctx.Log.Error("清空手牌失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("清空手牌失败", "Clear hand failed"), e); }
         }
 
         // ── 改设置（都要重喂一次状态）────────────────────────────────────────
 
         bool BeginEdit(string what)
         {
-            if (!InPlacement) { Say("只能在备战界面" + what); return false; }
+            if (!InPlacement) { Say(_ctx.T("只能在备战界面", "Only on the setup screen: ") + what); return false; }
             return Capture();
         }
 
@@ -542,7 +542,7 @@ namespace YxArena.Game
                 Present();
                 Persist();
             }
-            catch (Exception e) { _ctx.Log.Error("重新应用仙命设置失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("重新应用仙命设置失败", "Reapplying talent settings failed"), e); }
         }
 
         public int EditingIndex { get { return _editing; } }
@@ -552,61 +552,61 @@ namespace YxArena.Game
         {
             try
             {
-                if (!BeginEdit("切换编辑方")) return;
+                if (!BeginEdit(_ctx.T("切换编辑方", "switch editing side"))) return;
                 _editing = 1 - _editing;
                 Present();
                 Persist();
-                _ctx.Log.Info("现在编辑：" + _sides[_editing].Name);
+                _ctx.Log.Info(_ctx.T("现在编辑：", "Now editing: ") + _sides[_editing].Name);
             }
-            catch (Exception e) { _ctx.Log.Error("切换编辑方失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("切换编辑方失败", "Switch editing side failed"), e); }
         }
 
         public void NextLevel()
         {
             try
             {
-                if (!BeginEdit("改境界")) return;
+                if (!BeginEdit(_ctx.T("改境界", "change realm"))) return;
                 ArenaSide side = _sides[_editing];
                 side.Level = side.Level >= ArenaConfig.MaxLevel || side.Level < ArenaConfig.MinLevel ? ArenaConfig.MinLevel : side.Level + 1;
                 if (_editing == 0) _cfg.Level = side.Level;
                 Present();
             }
-            catch (Exception e) { _ctx.Log.Error("改境界失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("改境界失败", "Change realm failed"), e); }
         }
 
         public void SetHp(string text)
         {
             try
             {
-                if (!BeginEdit("改血量")) return;
+                if (!BeginEdit(_ctx.T("改血量", "change HP"))) return;
                 ArenaSide side = _sides[_editing];
-                if (!side.SetHp(text)) { Say("血量要填最多 18 位的整数（0 = 跟随境界；超过 20 亿的部分进 64 位血量池）"); return; }
+                if (!side.SetHp(text)) { Say(_ctx.T("血量要填最多 18 位的整数（0 = 跟随境界；超过 20 亿的部分进 64 位血量池）", "HP must be an integer of at most 18 digits (0 = follow realm; the part above ~2 billion goes into the 64-bit HP pool)")); return; }
                 if (_editing == 1) _cfg.DummyHp = side.Hp > ArenaSide.MaxNumber ? ArenaSide.MaxNumber : side.Hp;
                 Present();
             }
-            catch (Exception e) { _ctx.Log.Error("改血量失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("改血量失败", "Change HP failed"), e); }
         }
 
         public void SetTiPo(string text)
         {
             try
             {
-                if (!BeginEdit("改体魄")) return;
-                if (!_sides[_editing].SetTiPo(text)) { Say("体魄要填 0–" + N(ArenaSide.MaxNumber) + " 的整数"); return; }
+                if (!BeginEdit(_ctx.T("改体魄", "change body"))) return;
+                if (!_sides[_editing].SetTiPo(text)) { string max = N(ArenaSide.MaxNumber); Say(_ctx.T("体魄要填 0–" + max + " 的整数", "Body must be an integer 0–" + max)); return; }
                 Present();
             }
-            catch (Exception e) { _ctx.Log.Error("改体魄失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("改体魄失败", "Change body failed"), e); }
         }
 
         public void SetTiPoMax(string text)
         {
             try
             {
-                if (!BeginEdit("改体魄上限")) return;
-                if (!_sides[_editing].SetTiPoMax(text)) { Say("体魄上限要填 0–" + N(ArenaSide.MaxNumber) + " 的整数"); return; }
+                if (!BeginEdit(_ctx.T("改体魄上限", "change body max"))) return;
+                if (!_sides[_editing].SetTiPoMax(text)) { string max = N(ArenaSide.MaxNumber); Say(_ctx.T("体魄上限要填 0–" + max + " 的整数", "Body max must be an integer 0–" + max)); return; }
                 Present();
             }
-            catch (Exception e) { _ctx.Log.Error("改体魄上限失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("改体魄上限失败", "Change body max failed"), e); }
         }
 
         /// <summary>某一方开打时保留的手牌（0 = 我，1 = 对手）。与手牌有关的随机取值要用。</summary>
@@ -630,13 +630,13 @@ namespace YxArena.Game
 
         public void Fight()
         {
-            if (!InPlacement) { Say("只能在备战界面开打"); return; }
+            if (!InPlacement) { Say(_ctx.T("只能在备战界面开打", "You can only start the fight on the setup screen")); return; }
             try
             {
                 if (!Capture()) return;
                 int mine = _sides[0].PlacedCount();
                 int theirs = _sides[1].PlacedCount();
-                if (mine + theirs == 0) { Say("场上一张牌都没有，先摆牌"); return; }
+                if (mine + theirs == 0) { Say(_ctx.T("场上一张牌都没有，先摆牌", "No cards on the board; place some first")); return; }
 
                 string myUid = GameClientUtil.uid;
                 var r = new BattleResult();
@@ -664,18 +664,19 @@ namespace YxArena.Game
 
                 BattleManager.currentBattleResult = r;
                 BattleManager.Instance.PlayBattle();
-                string mineText = N(mine) + " 张 / " + DamageTally.Group(TrueTotalHp(0)) + " 血";
-                string theirsText = N(theirs) + " 张 / " + DamageTally.Group(TrueTotalHp(1)) + " 血";
-                _ctx.Log.Info("开打：我方 " + mineText + "，对手 " + theirsText + "，种子 " + LastSeed.ToString(CultureInfo.InvariantCulture));
+                string mineText = _ctx.T(N(mine) + " 张 / " + DamageTally.Group(TrueTotalHp(0)) + " 血", N(mine) + " cards / " + DamageTally.Group(TrueTotalHp(0)) + " HP");
+                string theirsText = _ctx.T(N(theirs) + " 张 / " + DamageTally.Group(TrueTotalHp(1)) + " 血", N(theirs) + " cards / " + DamageTally.Group(TrueTotalHp(1)) + " HP");
+                string seed = LastSeed.ToString(CultureInfo.InvariantCulture);
+                _ctx.Log.Info(_ctx.T("开打：我方 " + mineText + "，对手 " + theirsText + "，种子 " + seed, "Fight: mine " + mineText + ", foe " + theirsText + ", seed " + seed));
             }
-            catch (Exception e) { _ctx.Log.Error("开打失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("开打失败", "Fight failed"), e); }
         }
 
         // ── 离场 ──────────────────────────────────────────────────────────
 
         public void Leave()
         {
-            if (_state == StateIdle) { Say("不在练习场里"); return; }
+            if (_state == StateIdle) { Say(_ctx.T("不在练习场里", "Not in the arena")); return; }
             if (_state == StateLeaving) return;
             Autosave();
             string guard = RoomGuard.Reason();
@@ -697,7 +698,7 @@ namespace YxArena.Game
                     return;
                 }
             }
-            catch (Exception e) { _ctx.Log.Error("离场前收尾失败（照常回大厅）", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("离场前收尾失败（照常回大厅）", "Cleanup before leaving failed (returning to lobby anyway)"), e); }
             ToLobby();
         }
 
@@ -716,9 +717,9 @@ namespace YxArena.Game
             {
                 BattleManager.currentBattleResult = null;
                 if (!SceneLoader.isLoading && SceneLoader.currentSceneName == "Battle") SceneLoader.LoadScene("Lobby");
-                _ctx.Log.Info("离场：已请求回大厅");
+                _ctx.Log.Info(_ctx.T("离场：已请求回大厅", "Leave: requested return to lobby"));
             }
-            catch (Exception e) { _ctx.Log.Error("回大厅失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("回大厅失败", "Return to lobby failed"), e); }
         }
     }
 }

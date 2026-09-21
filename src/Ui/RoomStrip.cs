@@ -49,14 +49,14 @@ namespace YxArena.Views
             _root = _ui.Panel("YxArenaRoomStrip", corner, corner, new Vector2(16f, -16f), new Vector2(width, RowHeight * 2f + Pad * 2f + Gap), new Color(0f, 0f, 0f, 0.6f));
             if (_root == null) return;
             Transform t = _root.transform;
-            _ui.Label(t, "title", "练习场　点角色旁的仙命图标换仙命（全仙命表，不限角色）；右下「开始」进场", new Vector2(Pad, -Pad - 6f), new Vector2(width - Pad * 2f, RowHeight), 18f);
+            _ui.Label(t, "title", Loc.T("练习场　点角色旁的仙命图标换仙命（全仙命表，不限角色）；右下「开始」进场", "Arena  Click a talent icon by the character to change it (all talents, any character); click Start at lower-right to enter"), new Vector2(Pad, -Pad - 6f), new Vector2(width - Pad * 2f, RowHeight), 18f);
             float x = Pad;
             float y = -(Pad + RowHeight + Gap);
-            _ui.TextButton(t, "back", "返回", new Vector2(x, y), new Vector2(widths[0], RowHeight), _onBack);
+            _ui.TextButton(t, "back", Loc.T("返回", "Back"), new Vector2(x, y), new Vector2(widths[0], RowHeight), _onBack);
             x += widths[0] + Gap;
             _side = _ui.TextButton(t, "side", "", new Vector2(x, y), new Vector2(widths[1], RowHeight), _onSwitchSide);
             x += widths[1] + Gap;
-            _ui.TextButton(t, "talents", "仙命 / 计数", new Vector2(x, y), new Vector2(widths[2], RowHeight), _onTalents);
+            _ui.TextButton(t, "talents", Loc.T("仙命 / 计数", "Talents / count"), new Vector2(x, y), new Vector2(widths[2], RowHeight), _onTalents);
             x += widths[2] + Gap;
             _fates = _ui.TextButton(t, "fates", "", new Vector2(x, y), new Vector2(widths[3], RowHeight), _onFates);
         }
@@ -64,8 +64,9 @@ namespace YxArena.Views
         public void Refresh(bool opponent, int fateCount)
         {
             if (_root == null) return;
-            _side.SetText(opponent ? "正在设置：对手 ⇄" : "正在设置：我方 ⇄");
-            _fates.SetText("天衍仙命（" + fateCount.ToString(System.Globalization.CultureInfo.InvariantCulture) + "）");
+            _side.SetText(opponent ? Loc.T("正在设置：对手 ⇄", "Editing: foe ⇄") : Loc.T("正在设置：我方 ⇄", "Editing: mine ⇄"));
+            string n = fateCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _fates.SetText(Loc.T("天衍仙命（" + n + "）", "Fates (" + n + ")"));
         }
 
         public void Destroy()

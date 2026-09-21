@@ -53,12 +53,12 @@ namespace YxArena.Game
             _hooked = group.Complete;
             if (_hooked) return;
             group.CancelAll();
-            _ctx.Log.Warn("选择框的搜索不可用（选择框照常可用）");
+            _ctx.Log.Warn(_ctx.T("选择框的搜索不可用（选择框照常可用）", "Picker search unavailable (the picker still works)"));
         }
 
         void Fail(string where, Exception e)
         {
-            if (!_broken) _ctx.Log.Error("选择框搜索 " + where + " 出错（之后不再提供搜索）", e);
+            if (!_broken) _ctx.Log.Error(_ctx.T("选择框搜索 " + where + " 出错（之后不再提供搜索）", "Picker search " + where + " failed (search disabled from now on)"), e);
             _broken = true;
             _active = false;
             if (_row != null) _row.SetActive(false);
@@ -81,7 +81,7 @@ namespace YxArena.Game
                     if (existing != null) UnityEngine.Object.Destroy(existing.gameObject);
                     // 挂在框的正上方：y 取正值 = 在父物体上沿之外。
                     _row = _ui.Row(frame, InputName, new Vector2(0f, 48f), new Vector2(330f, 44f), new Color(0f, 0f, 0f, 0.75f));
-                    _ui.Label(_row.transform, "caption", "搜名字", new Vector2(8f, -8f), new Vector2(70f, 40f), 20f);
+                    _ui.Label(_row.transform, "caption", _ctx.T("搜名字", "Search"), new Vector2(8f, -8f), new Vector2(70f, 40f), 20f);
                     _input = _ui.TextInput(_row.transform, "input", new Vector2(80f, -2f), new Vector2(244f, 40f), 16, OnSearch);
                     _rowRect = _row.transform as RectTransform;
                 }

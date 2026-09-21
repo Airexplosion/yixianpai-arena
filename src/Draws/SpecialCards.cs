@@ -21,10 +21,10 @@ namespace YxArena.Draws
         {
             switch (category)
             {
-                case Dream: return "梦境";
-                case Mirage: return "幻境";
-                case Horse: return "马牌";
-                case Other: return "其他";
+                case Dream: return Loc.T("梦境", "Dream");
+                case Mirage: return Loc.T("幻境", "Mirage");
+                case Horse: return Loc.T("马牌", "Horse");
+                case Other: return Loc.T("其他", "Other");
                 default: return "?";
             }
         }

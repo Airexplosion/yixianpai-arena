@@ -77,7 +77,7 @@ namespace YxArena.Game
             Try("BattleCharacterUI", "ResetBuffItem", 0, OnResetIcons);
             bool hitStart = Try("BattleCharacter", "OnHit", 1, OnHitStart);
             _poolHooked = _group.Postfix("BattleCharacter", "ModifyHp", 5, OnHpModified) != null && play && hitStart;
-            if (!_poolHooked) _ctx.Log.Warn("64 位血量池不可用：血量超过 20 亿的部分不生效");
+            if (!_poolHooked) _ctx.Log.Warn(_ctx.T("64 位血量池不可用：血量超过 20 亿的部分不生效", "64-bit HP pool unavailable: HP above ~2 billion won't take effect"));
         }
 
         bool Try(string type, string method, int paramCount, Func<HookContext, bool> handler)
@@ -87,7 +87,7 @@ namespace YxArena.Game
 
         void Broken(string where, Exception e)
         {
-            if (!_warned) _ctx.Log.Error("战斗钩子 " + where + " 出错（之后不再报）", e);
+            if (!_warned) _ctx.Log.Error(_ctx.T("战斗钩子 " + where + " 出错（之后不再报）", "Battle hook " + where + " failed (won't report again)"), e);
             _warned = true;
         }
 
@@ -171,7 +171,7 @@ namespace YxArena.Game
                     {
                         // DamageInfo 是 struct：装箱的参数读不出来就只按实际掉血统计。
                         _structReadBroken = true;
-                        _ctx.Log.Warn("伤害统计：读不到减防前的伤害值，之后「总伤害」按实际掉血算");
+                        _ctx.Log.Warn(_ctx.T("伤害统计：读不到减防前的伤害值，之后「总伤害」按实际掉血算", "Damage tally: can't read pre-defense damage; \"Total dmg\" will be counted as actual HP lost"));
                     }
                 }
                 _pending = true;
@@ -270,7 +270,8 @@ namespace YxArena.Game
             _reported = true;
             if (_tally.TotalDamage(0) + _tally.TotalDamage(1) <= 0L) return;
             string text = Report(12).Replace(((char)10).ToString(), " ｜ ");
-            _ctx.Log.Info("伤害统计：" + text + " ｜ 溢出 " + SatMath.Overflows.ToString(System.Globalization.CultureInfo.InvariantCulture) + " 次（累计）");
+            string overflows = SatMath.Overflows.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _ctx.Log.Info(_ctx.T("伤害统计：" + text + " ｜ 溢出 " + overflows + " 次（累计）", "Damage tally: " + text + " ｜ overflows " + overflows + " (cumulative)"));
         }
 
         /// <summary>用了 64 位血量池的一方的真实血量（没用上返回空串）。</summary>
@@ -279,7 +280,7 @@ namespace YxArena.Game
             if (side < 0 || side > 1 || !_pools[side].Active) return "";
             long left = _pools[side].Effective;
             if (left < 0L) left = 0L;
-            return name + "　真实血量 " + DamageTally.Group(left) + " / " + DamageTally.Group(_totals[side]);
+            return name + _ctx.T("　真实血量 ", "  True HP ") + DamageTally.Group(left) + " / " + DamageTally.Group(_totals[side]);
         }
 
         void OnHitDone(HookContext h)

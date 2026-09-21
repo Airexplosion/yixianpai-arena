@@ -39,8 +39,9 @@ namespace YxArena
 
         public static string Name(int mode)
         {
-            if (!Lifted(mode)) return "上限：原版";
-            return "解限：" + HitCap(mode).ToString(CultureInfo.InvariantCulture) + "段";
+            if (!Lifted(mode)) return Loc.T("上限：原版", "Caps: vanilla");
+            string hits = HitCap(mode).ToString(CultureInfo.InvariantCulture);
+            return Loc.T("解限：" + hits + "段", "Uncapped: " + hits + " hits");
         }
     }
 }

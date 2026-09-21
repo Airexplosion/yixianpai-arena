@@ -52,7 +52,7 @@ namespace YxArena.Game
             _hooked = group.Complete;
             if (_hooked) return;
             group.CancelAll();
-            _ctx.Log.Warn("游戏自己的「切换」按钮借不了（换边用控制栏上的按钮）");
+            _ctx.Log.Warn(_ctx.T("游戏自己的「切换」按钮借不了（换边用控制栏上的按钮）", "Can't borrow the game's own Switch button (use the control bar to switch sides)"));
         }
 
         bool OnSwitchClick(HookContext h)
@@ -60,7 +60,7 @@ namespace YxArena.Game
             if (!ArenaSession.Active) return true;
             h.Skip(null);
             try { _onSwitch(); }
-            catch (Exception e) { _ctx.Log.Error("换边出错", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("换边出错", "Switch side failed"), e); }
             return false;
         }
 
@@ -79,7 +79,7 @@ namespace YxArena.Game
             try
             {
                 ReadyLayerRecoveryingCI ci = Find();
-                if (ci == null) { Fail("这组控件加载不出来", null); return; }
+                if (ci == null) { Fail(_ctx.T("这组控件加载不出来", "couldn't load its controls"), null); return; }
                 if (!ci.showing) ci.Refresh();
                 _shown = true;
                 Button switchButton = ci.FindComponent<Button>("SwitchButton");
@@ -89,12 +89,12 @@ namespace YxArena.Game
                 TextMeshProUGUI label = ci.FindComponent<TextMeshProUGUI>("ReviewLabel");
                 if (label != null)
                 {
-                    string text = editingOpponent ? "练习场 · 对手" : "练习场 · 我方";
+                    string text = editingOpponent ? Loc.T("练习场 · 对手", "Arena · Foe") : Loc.T("练习场 · 我方", "Arena · Mine");
                     if (label.text != text) label.text = text;
                 }
                 PlaceOnStatsRow(switchButton, label);
             }
-            catch (Exception e) { Fail("摆放出错", e); }
+            catch (Exception e) { Fail(_ctx.T("摆放出错", "layout failed"), e); }
         }
 
         /// <summary>离开练习场时收起来（Battle 场景下次会重新加载，这里只是不留尾巴）。</summary>
@@ -193,8 +193,10 @@ namespace YxArena.Game
         void Fail(string what, Exception e)
         {
             _failed = true;
-            if (e != null) _ctx.Log.Error("游戏自己的「切换」按钮" + what + "（之后用控制栏上的按钮换边）", e);
-            else _ctx.Log.Warn("游戏自己的「切换」按钮" + what + "（之后用控制栏上的按钮换边）");
+            string prefix = _ctx.T("游戏自己的「切换」按钮", "Game's own Switch button: ");
+            string suffix = _ctx.T("（之后用控制栏上的按钮换边）", " (switch sides from the control bar instead)");
+            if (e != null) _ctx.Log.Error(prefix + what + suffix, e);
+            else _ctx.Log.Warn(prefix + what + suffix);
         }
     }
 }

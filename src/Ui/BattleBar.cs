@@ -67,7 +67,7 @@ namespace YxArena.Views
             _root = _ui.Panel("YxArenaBattleBar", top, top, new Vector2(0f, -4f), new Vector2(width, RowHeight + Pad * 2f), background);
             if (_root == null) return;
             float x = Pad;
-            _step = _ui.TextButton(_root.transform, "step", "步进 ▶|", new Vector2(x, -Pad), new Vector2(ButtonWidth, RowHeight), _onStep);
+            _step = _ui.TextButton(_root.transform, "step", Loc.T("步进 ▶|", "Step ▶|"), new Vector2(x, -Pad), new Vector2(ButtonWidth, RowHeight), _onStep);
             x += ButtonWidth + Gap;
             _pauseAtStart = _ui.TextButton(_root.transform, "pauseAtStart", "", new Vector2(x, -Pad), new Vector2(ButtonWidth, RowHeight), _onTogglePauseAtStart);
             x += ButtonWidth + Gap;
@@ -87,11 +87,11 @@ namespace YxArena.Views
         public void Refresh(bool stepAvailable, bool pauseAtStart, bool paused, bool tallyOpen, string tallyText)
         {
             if (_root == null) return;
-            _step.SetText(paused ? "步进 ▶|  ‖" : "步进 ▶|");
+            _step.SetText(paused ? Loc.T("步进 ▶|  ‖", "Step ▶|  ‖") : Loc.T("步进 ▶|", "Step ▶|"));
             _step.SetInteractable(stepAvailable);
-            _pauseAtStart.SetText(pauseAtStart ? "开场暂停：开" : "开场暂停：关");
+            _pauseAtStart.SetText(pauseAtStart ? Loc.T("开场暂停：开", "Pause at start: on") : Loc.T("开场暂停：关", "Pause at start: off"));
             _tallyOpen = tallyOpen && !string.IsNullOrEmpty(tallyText);
-            if (_tallyToggle != null) _tallyToggle.SetText(tallyOpen ? "伤害统计 ▶" : "◀ 伤害统计");
+            if (_tallyToggle != null) _tallyToggle.SetText(tallyOpen ? Loc.T("伤害统计 ▶", "Damage ▶") : Loc.T("◀ 伤害统计", "◀ Damage"));
             ApplyWindow();
             if (_tally != null && _tallyOpen) _tally.text = tallyText;
         }

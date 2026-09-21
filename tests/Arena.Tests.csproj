@@ -11,6 +11,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- 不引用 mod 工程（那是 net40 的游戏内程序集）：把不碰游戏的源码直接编进来。src/Game、src/Ui 与 ArenaMod.cs 依赖游戏绑定层，不编。 -->
+    <Compile Include="..\src\Loc.cs" Link="src\Loc.cs" />
     <Compile Include="..\src\CardIds.cs" Link="src\CardIds.cs" />
     <Compile Include="..\src\ParamStream.cs" Link="src\ParamStream.cs" />
     <Compile Include="..\src\ArenaConfig.cs" Link="src\ArenaConfig.cs" />

@@ -49,7 +49,7 @@ namespace YxArena.Game
         public void Install()
         {
             Installed = _ctx.Hooks.TryPrefix("IllustrationCardItem", "OnPointerClick", 1, OnCardClick) != null;
-            if (!Installed) _ctx.Log.Warn("图鉴点牌钩子没挂上：发牌用不了");
+            if (!Installed) _ctx.Log.Warn(_ctx.T("图鉴点牌钩子没挂上：发牌用不了", "Gallery click hook not installed: dealing is unavailable"));
         }
 
         bool OnCardClick(HookContext h)
@@ -64,8 +64,8 @@ namespace YxArena.Game
             if (_session.Deal(id))
             {
                 Dealt++;
-                string note = CardIds.RarityOf(id) == _cfg.Rarity ? "" : "（没有" + ArenaConfig.RarityName(_cfg.Rarity) + "，发了 1 级）";
-                _notify("发牌 → " + _session.Editing.Name + "：" + config.name + " " + ArenaConfig.RarityName(CardIds.RarityOf(id)) + note);
+                string note = CardIds.RarityOf(id) == _cfg.Rarity ? "" : _ctx.T("（没有" + ArenaConfig.RarityName(_cfg.Rarity) + "，发了 1 级）", " (no " + ArenaConfig.RarityName(_cfg.Rarity) + "; dealt Lv.1)");
+                _notify(_ctx.T("发牌 → ", "Deal → ") + _session.Editing.Name + _ctx.T("：", ": ") + config.name + " " + ArenaConfig.RarityName(CardIds.RarityOf(id)) + note);
             }
             h.Skip(null);
             return false;
@@ -78,19 +78,21 @@ namespace YxArena.Game
         /// </summary>
         public void OpenSpecial()
         {
-            if (!_session.InPlacement) { Ui.Toast("只能在备战界面发牌"); return; }
+            if (!_session.InPlacement) { Ui.Toast(_ctx.T("只能在备战界面发牌", "Cards can only be dealt on the setup screen")); return; }
             try
             {
                 CardFacts[] all = AllFacts();
                 int[] ids = SpecialCards.Ids(SpecialCategory, all);
                 int hiddenByPanel = SpecialCards.CountWithoutRealm(SpecialCategory, all);
                 string name = SpecialCards.Name(SpecialCategory);
-                _ctx.Log.Info("特殊牌「" + name + "」：" + ids.Length.ToString(CultureInfo.InvariantCulture) + " 张；另有 "
-                              + hiddenByPanel.ToString(CultureInfo.InvariantCulture) + " 张没有境界，游戏的面板显示不了");
-                if (ids.Length == 0) { Ui.Toast("「" + name + "」这一类里没有能显示的牌"); return; }
+                string shown = ids.Length.ToString(CultureInfo.InvariantCulture);
+                string hidden = hiddenByPanel.ToString(CultureInfo.InvariantCulture);
+                _ctx.Log.Info(_ctx.T("特殊牌「" + name + "」：" + shown + " 张；另有 " + hidden + " 张没有境界，游戏的面板显示不了",
+                              "Special cards \"" + name + "\": " + shown + "; another " + hidden + " have no realm and can't be shown by the game's panel"));
+                if (ids.Length == 0) { Ui.Toast(_ctx.T("「" + name + "」这一类里没有能显示的牌", "No showable cards in the \"" + name + "\" category")); return; }
                 ShowCards(ids);
             }
-            catch (Exception e) { _ctx.Log.Error("打开特殊牌面板失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("打开特殊牌面板失败", "Open special cards panel failed"), e); }
         }
 
         CardFacts[] AllFacts()
@@ -108,7 +110,7 @@ namespace YxArena.Game
             BattlePanel bp = ILRPanelBase.FindILRPanel<BattlePanel>();
             if (bp == null || bp.readyLayer == null) return false;
             SpecificCardIllustrationPanel panel = bp.FindILRSubPanelRuntime<SpecificCardIllustrationPanel>(bp.readyLayer.subPanelContainer);
-            if (panel == null) { Ui.Toast("没能打开卡牌面板"); return false; }
+            if (panel == null) { Ui.Toast(_ctx.T("没能打开卡牌面板", "Couldn't open the card panel")); return false; }
             var list = new List<int>();
             for (int i = 0; i < ids.Length; i++) list.Add(ids[i]);
             panel.Show(list);
@@ -122,23 +124,25 @@ namespace YxArena.Game
         public void Search(string query)
         {
             if (query == null || query.Trim().Length == 0) return;
-            if (!_session.InPlacement) { Ui.Toast("只能在备战界面发牌"); return; }
+            if (!_session.InPlacement) { Ui.Toast(_ctx.T("只能在备战界面发牌", "Cards can only be dealt on the setup screen")); return; }
             try
             {
                 string wanted = query.Trim();
                 CardFacts[] all = AllFacts();
                 int[] found = CardSearch.Find(wanted, all);
-                if (found.Length == 0) { Ui.Toast("没有名字含「" + wanted + "」的牌"); return; }
+                if (found.Length == 0) { Ui.Toast(_ctx.T("没有名字含「" + wanted + "」的牌", "No cards with a name containing \"" + wanted + "\"")); return; }
                 int[] showable = CardSearch.Showable(found, all);
-                _ctx.Log.Info("搜牌「" + wanted + "」：" + found.Length.ToString(CultureInfo.InvariantCulture) + " 张，能显示 "
-                              + showable.Length.ToString(CultureInfo.InvariantCulture) + " 张");
+                string foundN = found.Length.ToString(CultureInfo.InvariantCulture);
+                string showN = showable.Length.ToString(CultureInfo.InvariantCulture);
+                _ctx.Log.Info(_ctx.T("搜牌「" + wanted + "」：" + foundN + " 张，能显示 " + showN + " 张",
+                              "Search \"" + wanted + "\": " + foundN + " found, " + showN + " showable"));
                 if (showable.Length > 0) { ShowCards(showable); return; }
                 int id = CardIds.Pick(found[0], _cfg.Rarity, _catalog);
                 if (id == 0 || !_session.Deal(id)) return;
                 Dealt++;
-                _notify("发牌 → " + _session.Editing.Name + "：" + NameOf(id, all) + "（没有境界，面板显示不了，直接发了）");
+                _notify(_ctx.T("发牌 → ", "Deal → ") + _session.Editing.Name + _ctx.T("：", ": ") + NameOf(id, all) + _ctx.T("（没有境界，面板显示不了，直接发了）", " (no realm; can't show in panel, dealt directly)"));
             }
-            catch (Exception e) { _ctx.Log.Error("搜牌失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("搜牌失败", "Card search failed"), e); }
         }
 
         static string NameOf(int id, CardFacts[] all)
@@ -151,7 +155,7 @@ namespace YxArena.Game
         /// <summary>打开游戏自己的图鉴（备战界面的图鉴按钮做的就是这一句）。</summary>
         public void OpenGallery()
         {
-            if (!_session.InPlacement) { Ui.Toast("只能在备战界面发牌"); return; }
+            if (!_session.InPlacement) { Ui.Toast(_ctx.T("只能在备战界面发牌", "Cards can only be dealt on the setup screen")); return; }
             try
             {
                 BattlePanel bp = ILRPanelBase.FindILRPanel<BattlePanel>();
@@ -159,7 +163,7 @@ namespace YxArena.Game
                 CardIllustrationPanel gallery = bp.FindILRSubPanelRuntime<CardIllustrationPanel>(bp.readyLayer.subPanelContainer);
                 if (gallery != null) gallery.ShowNormal(false);
             }
-            catch (Exception e) { _ctx.Log.Error("打开图鉴失败", e); }
+            catch (Exception e) { _ctx.Log.Error(_ctx.T("打开图鉴失败", "Open gallery failed"), e); }
         }
     }
 }
