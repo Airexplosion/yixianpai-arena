@@ -30,9 +30,14 @@
     <Compile Include="..\src\ControlLayout.cs" Link="src\ControlLayout.cs" />
     <Compile Include="..\src\ChengxinSetup.cs" Link="src\ChengxinSetup.cs" />
     <Compile Include="..\src\Draws\*.cs" LinkBase="src\Draws" />
+    <Compile Include="..\src\Game\ReviewImport.cs" Link="src\Game\ReviewImport.cs" />
+    <Compile Include="..\src\Game\TalentDetails.cs" Link="src\Game\TalentDetails.cs" />
     <Compile Include="*.cs" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Import tests use the real protocol DTOs, without calling Unity/game UI. -->
+    <Reference Include="DarkSun.HotUpdate"><HintPath>$(YxRefs)DarkSun.HotUpdate.dll</HintPath></Reference>
+    <Reference Include="wProtobuf"><HintPath>$(YxRefs)wProtobuf.dll</HintPath></Reference>
     <Reference Include="Yx.ModSdk.Core"><HintPath>$(YxSdkDir)netstandard2.0\Yx.ModSdk.Core.dll</HintPath></Reference>
     <Reference Include="Yx.ModSdk.Testing"><HintPath>$(YxSdkDir)netstandard2.0\Yx.ModSdk.Testing.dll</HintPath></Reference>
   </ItemGroup>

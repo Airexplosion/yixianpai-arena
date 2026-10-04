@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Proto;
 
 namespace YxArena.Game
@@ -10,12 +11,14 @@ namespace YxArena.Game
 
 		public static void Read(ArenaSide side, BattlePlayerData pub, BattlePlayerPrivateData priv)
 		{
-			side.SetLearnedCards((pub.talentDatas.TryGetValue(189, out var value) && value != null) ? value.commonParams : null);
-			side.SetBottleCards((priv.talentDatas.TryGetValue(199, out value) && value != null) ? value.commonParams : null);
+			BattleTalentData value;
+			side.SetLearnedCards((pub != null && pub.talentDatas != null && pub.talentDatas.TryGetValue(189, out value) && value != null) ? value.commonParams : null);
+			side.SetBottleCards((priv != null && priv.talentDatas != null && priv.talentDatas.TryGetValue(199, out value) && value != null) ? value.commonParams : null);
 		}
 
 		public static void WritePublic(ArenaSide side, BattlePlayerData pub)
 		{
+			if (pub.talentDatas == null) pub.talentDatas = new Dictionary<int, BattleTalentData>();
 			BattleTalentData battleTalentData = new BattleTalentData();
 			for (int i = 0; i < side.LearnedCards.Count; i++)
 			{
@@ -26,6 +29,7 @@ namespace YxArena.Game
 
 		public static void WritePrivate(ArenaSide side, BattlePlayerPrivateData priv)
 		{
+			if (priv.talentDatas == null) priv.talentDatas = new Dictionary<int, BattleTalentData>();
 			BattleTalentData battleTalentData = new BattleTalentData();
 			for (int i = 0; i < side.BottleCards.Count; i++)
 			{

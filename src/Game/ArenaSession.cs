@@ -296,9 +296,9 @@ namespace YxArena.Game
 				PlayerData playerData = ((battleResult.mainViewId == battleResult.p2.publicData.uid) ? battleResult.p2 : battleResult.p1);
 				PlayerData playerData2 = ((playerData == battleResult.p1) ? battleResult.p2 : battleResult.p1);
 				ReviewStage = "导入我方数据";
-				ArenaSide arenaSide = ReviewImport.Side(playerData);
+				ArenaSide arenaSide = ReviewImport.Side(playerData, step => LogReviewStage("我方", step));
 				ReviewStage = "导入对手数据";
-				ArenaSide arenaSide2 = ReviewImport.Side(playerData2);
+				ArenaSide arenaSide2 = ReviewImport.Side(playerData2, step => LogReviewStage("对手", step));
 				ReviewStage = "设置练习会话";
 				_savedSides = new ArenaSide[2]
 				{
@@ -320,6 +320,12 @@ namespace YxArena.Game
 				BeginEnter();
 				Say("已导入复盘第 " + N(battleResult.round) + " 轮，可在练习场编辑并求解");
 			}
+		}
+
+		private void LogReviewStage(string side, string step)
+		{
+			ReviewStage = "导入" + side + "数据 / " + step;
+			_ctx.Log.Info("复盘导入：" + ReviewStage);
 		}
 
 		private void ResetReview()

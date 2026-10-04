@@ -1,4 +1,4 @@
-param([string]$Current = (Join-Path $PSScriptRoot '../plugins/Arena.dll'))
+param([string]$Current = (Join-Path $PSScriptRoot '../plugins/Arena.dll'), [int]$TestCount = 219)
 $ErrorActionPreference = 'Stop'
 Add-Type -Path (Join-Path $PSScriptRoot '../../yixianpai-mod-sdk/tools/Mono.Cecil.dll')
 $assembly = [Mono.Cecil.AssemblyDefinition]::ReadAssembly($Current)
@@ -22,8 +22,8 @@ try {
     $handFields = @($hand.Body.Instructions | Where-Object { $_.Operand -is [Mono.Cecil.FieldReference] } | ForEach-Object { $_.Operand.Name })
     if ($handFields -notcontains 'lastRoundData' -or $handFields -notcontains 'handCards' -or $handFields -contains 'leftCharacter') { throw 'Hand reader still depends on screen side instead of battle snapshot' }
     [ordered]@{
-        version = '0.16.6'
-        testsPassed = 200
+        version = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '../manifest.json') -Raw -Encoding utf8 | ConvertFrom-Json).version
+        testsPassed = $TestCount
         releaseBuildErrors = 0
         releaseBuildWarnings = 0
         rendererMatchesGameSignature = $true
@@ -34,8 +34,8 @@ try {
         sha256 = (Get-FileHash -LiteralPath $Current -Algorithm SHA256).Hash.ToLowerInvariant()
         gameRefsSha256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot '../../yixianpai-mod-sdk/refs/DarkSun.HotUpdate.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
         inGameValidated = $false
-    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'arena-0.16.6-validation.json') -Encoding utf8
-    Get-Content -LiteralPath (Join-Path $PSScriptRoot 'arena-0.16.6-validation.json')
+    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'arena-0.16.7-validation.json') -Encoding utf8
+    Get-Content -LiteralPath (Join-Path $PSScriptRoot 'arena-0.16.7-validation.json')
 } finally {
     $assembly.Dispose()
     $game.Dispose()
