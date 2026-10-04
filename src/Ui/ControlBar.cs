@@ -15,6 +15,11 @@ namespace YxArena.Views
     {
         public Action ToggleCollapsed;
         public Action OpenGallery;
+        public Action OpenQuick;
+        public Action OpenSettings;
+        public Action OpenSword;
+        public Action OpenLearned;
+        public Action Leave;
         public Action OpenSpecial;
         public Action OpenTalents;
         public Action NextSpecial;
@@ -44,6 +49,7 @@ namespace YxArena.Views
         public bool EditingOpponent;
         public bool PauseAtStart;
         public bool Overflow;
+        public bool SwordOwner;
         public int LimitMode;
         public string SideName = "";
         public long TotalHp;
@@ -63,7 +69,6 @@ namespace YxArena.Views
         const float RowHeight = 40f;
         const float Gap = 5f;
         const float Pad = 6f;
-        const int ButtonCount = 12;
         const float StatusHeight = 22f;
         const float HpWidth = 210f;      // 18 位数字
 
@@ -79,20 +84,23 @@ namespace YxArena.Views
         UiButton _pauseAtStart;
         UiButton _overflow;
         UiButton _limits;
+        UiButton _sword;
         UiInput _hp;
         UiInput _tiPo;
         UiInput _tiPoMax;
         TextMeshProUGUI _status;
         bool _collapsed;
         bool _visible;
-        float _x;
+        ControlLayout _layout;
+        readonly ControlVisibility _visibility;
 
         readonly UiKit _ui;
 
-        public ControlBar(UiKit ui, ControlBarHandlers actions)
+        public ControlBar(UiKit ui, ControlBarHandlers actions, ControlVisibility visibility)
         {
             _ui = ui;
             _actions = actions;
+            _visibility = visibility;
         }
 
         /// <summary>换边由游戏自己的「切换」按钮负责：控制栏就不画「编辑：我方 / 对手」了。改了要 Destroy 后重建才生效。</summary>
@@ -130,6 +138,10 @@ namespace YxArena.Views
             if (_tab != null) _ui.Destroy(_tab);
             _root = null;
             _tab = null;
+            _dealMode = _rarity = _level = _first = _side = _special = _pauseAtStart = _overflow = _limits = null;
+            _sword = null;
+            _hp = _tiPo = _tiPoMax = null;
+            _status = null;
         }
 
         void Build()
@@ -137,56 +149,70 @@ namespace YxArena.Views
             Destroy();
             var top = new Vector2(0.5f, 1f);
             var background = new Color(0f, 0f, 0f, 0.6f);
-            int buttons = NativeSide ? ButtonCount - 1 : ButtonCount;
-            float width = Pad * 2f + buttons * ButtonWidth + (buttons - 1) * Gap;
-            float height = Pad * 2f + RowHeight * 2f + Gap * 2f + StatusHeight;
-            _root = _ui.Panel("YxArenaControlBar", top, top, new Vector2(0f, -4f), new Vector2(width, height), background);
+            float width = 1450f;
+            _root = _ui.Panel("YxArenaControlBar", top, top, new Vector2(0f, -4f), new Vector2(width, RowHeight + Pad * 2f), background);
             _tab = _ui.Panel("YxArenaControlTab", top, top, new Vector2(0f, -4f), new Vector2(ButtonWidth + Pad * 2f, RowHeight + Pad * 2f), background);
             if (_root == null || _tab == null) { Destroy(); return; }
             _ui.TextButton(_tab.transform, "expand", Loc.T("练习场 ▼", "Arena ▼"), new Vector2(Pad, -Pad), new Vector2(ButtonWidth, RowHeight), _actions.ToggleCollapsed);
 
-            _x = Pad;
+            RectTransform parent = _root.transform.parent as RectTransform;
+            if (parent != null && parent.rect.width > 360f) width = Mathf.Min(width, parent.rect.width - 16f);
+            _layout = new ControlLayout(width);
             Button(Loc.T("收起 ▲", "Collapse ▲"), _actions.ToggleCollapsed);
-            Button(Loc.T("发牌", "Deal"), _actions.OpenGallery);
-            _dealMode = Button("", _actions.ToggleDealMode);
-            _rarity = Button("", _actions.NextRarity);
-            _level = Button("", _actions.NextLevel);
-            _first = Button("", _actions.ToggleFirst);
-            Button(Loc.T("清空手牌", "Clear hand"), _actions.ClearHand);
-            _side = NativeSide ? null : Button("", _actions.SwitchSide);
-            _pauseAtStart = Button("", _actions.TogglePauseAtStart);
-            _overflow = Button("", _actions.ToggleOverflow);
-            _limits = Button("", _actions.NextLimitMode);
-            Button(Loc.T("开打", "Fight"), _actions.Fight);
-
-            float y = -(Pad + RowHeight + Gap);
-            float x = Pad;
-            x = Caption(Loc.T("血量", "HP"), x, y, 50f);
-            _hp = _ui.NumberInput(_root.transform, "hp", new Vector2(x, y), new Vector2(HpWidth, RowHeight), 18, _actions.SetHp);
-            x += HpWidth + Gap * 3f;
-            x = Caption(Loc.T("体魄", "Body"), x, y, 50f);
-            _tiPo = _ui.NumberInput(_root.transform, "tipo", new Vector2(x, y), new Vector2(90f, RowHeight), 6, _actions.SetTiPo);
-            x += 90f + Gap * 3f;
-            x = Caption(Loc.T("体魄上限", "Body max"), x, y, 92f);
-            _tiPoMax = _ui.NumberInput(_root.transform, "tipoMax", new Vector2(x, y), new Vector2(90f, RowHeight), 6, _actions.SetTiPoMax);
-            x += 90f + Gap * 3f;
-            _ui.TextButton(_root.transform, "special", Loc.T("特殊牌", "Special"), new Vector2(x, y), new Vector2(ButtonWidth, RowHeight), _actions.OpenSpecial);
-            x += ButtonWidth + Gap;
-            _special = _ui.TextButton(_root.transform, "specialKind", "", new Vector2(x, y), new Vector2(ButtonWidth + 20f, RowHeight), _actions.NextSpecial);
-            x += ButtonWidth + 20f + Gap * 3f;
-            _ui.TextButton(_root.transform, "talents", Loc.T("仙命…", "Talents…"), new Vector2(x, y), new Vector2(96f, RowHeight), _actions.OpenTalents);
-            x += 96f + Gap * 3f;
-            x = Caption(Loc.T("搜牌名", "Search"), x, y, 72f);
-            _ui.TextInput(_root.transform, "search", new Vector2(x, y), new Vector2(width - x - Pad, RowHeight), 16, _actions.Search);
-            _status = _ui.Label(_root.transform, "status", "", new Vector2(Pad, y - RowHeight - Gap), new Vector2(width - Pad * 2f, StatusHeight), 16f);
+            Button(Loc.T("设置", "Settings"), _actions.OpenSettings);
+            Control(ControlVisibility.Gallery, Loc.T("发牌", "Deal"), _actions.OpenGallery);
+            Control(ControlVisibility.Quick, Loc.T("快捷发牌", "Quick deal"), _actions.OpenQuick);
+            _sword = Control(ControlVisibility.Sword, Loc.T("澄心剑…", "Chengxin…"), _actions.OpenSword);
+            _dealMode = Control(ControlVisibility.DealMode, "", _actions.ToggleDealMode);
+            _rarity = Control(ControlVisibility.Rarity, "", _actions.NextRarity);
+            _level = Control(ControlVisibility.Level, "", _actions.NextLevel);
+            _first = Control(ControlVisibility.First, "", _actions.ToggleFirst);
+            Control(ControlVisibility.ClearHand, Loc.T("清空手牌", "Clear hand"), _actions.ClearHand);
+            _side = NativeSide ? null : Control(ControlVisibility.Side, "", _actions.SwitchSide);
+            _pauseAtStart = Control(ControlVisibility.Pause, "", _actions.TogglePauseAtStart);
+            _overflow = Control(ControlVisibility.Overflow, "", _actions.ToggleOverflow);
+            _limits = Control(ControlVisibility.Limits, "", _actions.NextLimitMode);
+            Control(ControlVisibility.Fight, Loc.T("开打", "Fight"), _actions.Fight);
+            Control(ControlVisibility.Leave, Loc.T("回大厅", "Back to lobby"), _actions.Leave);
+            _hp = Number(ControlVisibility.Hp, "hp", Loc.T("血量", "HP"), 50f, HpWidth, 18, _actions.SetHp);
+            _tiPo = Number(ControlVisibility.Body, "tipo", Loc.T("体魄", "Body"), 50f, 90f, 6, _actions.SetTiPo);
+            _tiPoMax = Number(ControlVisibility.BodyMax, "tipoMax", Loc.T("体魄上限", "Body max"), 92f, 90f, 6, _actions.SetTiPoMax);
+            Control(ControlVisibility.Special, Loc.T("特殊牌", "Special"), _actions.OpenSpecial);
+            _special = Control(ControlVisibility.Category, "", _actions.NextSpecial);
+            Control(ControlVisibility.Talents, Loc.T("仙命…", "Talents…"), _actions.OpenTalents);
+            Control(ControlVisibility.Learned, Loc.T("悟剑…", "Learned…"), _actions.OpenLearned);
+            if (_visibility.Shows(ControlVisibility.Search))
+            {
+                ControlSlot slot = _layout.Add(272f);
+                float x = Caption(Loc.T("搜牌名", "Search"), slot.X, slot.Y, 72f);
+                _ui.TextInput(_root.transform, "search", new Vector2(x, slot.Y), new Vector2(200f, RowHeight), 16, _actions.Search);
+            }
+            float height = -_layout.Bottom;
+            if (_visibility.Shows(ControlVisibility.Status))
+            {
+                _status = _ui.Label(_root.transform, "status", "", new Vector2(Pad, _layout.Bottom - Gap), new Vector2(_layout.Width - Pad * 2f, StatusHeight), 16f);
+                height += Gap + StatusHeight;
+            }
+            RectTransform rect = _root.transform as RectTransform;
+            if (rect != null) rect.sizeDelta = new Vector2(_layout.Width, height);
             Apply();
         }
 
         UiButton Button(string text, Action onClick)
         {
-            UiButton button = _ui.TextButton(_root.transform, "button", text, new Vector2(_x, -Pad), new Vector2(ButtonWidth, RowHeight), onClick);
-            _x += ButtonWidth + Gap;
-            return button;
+            ControlSlot slot = _layout.Add(ButtonWidth);
+            return _ui.TextButton(_root.transform, "button", text, new Vector2(slot.X, slot.Y), new Vector2(ButtonWidth, RowHeight), onClick);
+        }
+
+        UiButton Control(int key, string text, Action onClick)
+        { return _visibility.Shows(key) ? Button(text, onClick) : null; }
+
+        UiInput Number(int key, string name, string caption, float captionWidth, float inputWidth, int digits, Action<string> action)
+        {
+            if (!_visibility.Shows(key)) return null;
+            ControlSlot slot = _layout.Add(captionWidth + inputWidth + Gap * 2f);
+            float x = Caption(caption, slot.X, slot.Y, captionWidth);
+            return _ui.NumberInput(_root.transform, name, new Vector2(x, slot.Y), new Vector2(inputWidth, RowHeight), digits, action);
         }
 
         float Caption(string text, float x, float y, float width)
@@ -198,18 +224,19 @@ namespace YxArena.Views
         public void Refresh(ControlBarState state)
         {
             if (!IsAlive) return;
-            _dealMode.SetText(state.DealMode ? Loc.T("点牌：发牌", "Click: deal") : Loc.T("点牌：详情", "Click: detail"));
-            _rarity.SetText(Loc.T("牌级：", "Rarity: ") + ArenaConfig.RarityName(state.Rarity));
-            _level.SetText(Loc.T("境界：", "Realm: ") + ArenaConfig.LevelName(state.Level));
-            _first.SetText(state.PlayerFirst ? Loc.T("先手：我", "First: me") : Loc.T("先手：对手", "First: foe"));
+            if (_sword != null) _sword.SetInteractable(state.SwordOwner);
+            if (_dealMode != null) _dealMode.SetText(state.DealMode ? Loc.T("点牌：发牌", "Click: deal") : Loc.T("点牌：详情", "Click: detail"));
+            if (_rarity != null) _rarity.SetText(Loc.T("牌级：", "Rarity: ") + ArenaConfig.RarityName(state.Rarity));
+            if (_level != null) _level.SetText(Loc.T("境界：", "Realm: ") + ArenaConfig.LevelName(state.Level));
+            if (_first != null) _first.SetText(state.PlayerFirst ? Loc.T("先手：我", "First: me") : Loc.T("先手：对手", "First: foe"));
             if (_side != null) _side.SetText(state.EditingOpponent ? Loc.T("编辑：对手 ⇄", "Edit: foe ⇄") : Loc.T("编辑：我方 ⇄", "Edit: mine ⇄"));
-            _special.SetText(Loc.T("类别：", "Kind: ") + state.SpecialName);
-            _pauseAtStart.SetText(state.PauseAtStart ? Loc.T("开场暂停：开", "Pause at start: on") : Loc.T("开场暂停：关", "Pause at start: off"));
-            _overflow.SetText(state.Overflow ? Loc.T("破限：开", "Overflow: on") : Loc.T("破限：关", "Overflow: off"));
-            _limits.SetText(LimitModes.Name(state.LimitMode));
-            _hp.Show(state.TotalHp.ToString(CultureInfo.InvariantCulture));
-            _tiPo.Show(state.TiPo.ToString(CultureInfo.InvariantCulture));
-            _tiPoMax.Show(state.TiPoMax.ToString(CultureInfo.InvariantCulture));
+            if (_special != null) _special.SetText(Loc.T("类别：", "Kind: ") + state.SpecialName);
+            if (_pauseAtStart != null) _pauseAtStart.SetText(state.PauseAtStart ? Loc.T("开场暂停：开", "Pause at start: on") : Loc.T("开场暂停：关", "Pause at start: off"));
+            if (_overflow != null) _overflow.SetText(state.Overflow ? Loc.T("破限：开", "Overflow: on") : Loc.T("破限：关", "Overflow: off"));
+            if (_limits != null) _limits.SetText(LimitModes.Name(state.LimitMode));
+            if (_hp != null) _hp.Show(state.TotalHp.ToString(CultureInfo.InvariantCulture));
+            if (_tiPo != null) _tiPo.Show(state.TiPo.ToString(CultureInfo.InvariantCulture));
+            if (_tiPoMax != null) _tiPoMax.Show(state.TiPoMax.ToString(CultureInfo.InvariantCulture));
             if (_status != null) _status.text = state.Status;
         }
     }

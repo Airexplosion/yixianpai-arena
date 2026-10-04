@@ -13,6 +13,7 @@
     <!-- 不引用 mod 工程（那是 net40 的游戏内程序集）：把不碰游戏的源码直接编进来。src/Game、src/Ui 与 ArenaMod.cs 依赖游戏绑定层，不编。 -->
     <Compile Include="..\src\Loc.cs" Link="src\Loc.cs" />
     <Compile Include="..\src\CardIds.cs" Link="src\CardIds.cs" />
+    <Compile Include="..\src\ICardCatalog.cs" Link="src\ICardCatalog.cs" />
     <Compile Include="..\src\ParamStream.cs" Link="src\ParamStream.cs" />
     <Compile Include="..\src\ArenaConfig.cs" Link="src\ArenaConfig.cs" />
     <Compile Include="..\src\ArenaSide.cs" Link="src\ArenaSide.cs" />
@@ -25,11 +26,15 @@
     <Compile Include="..\src\OncePerOwner.cs" Link="src\OncePerOwner.cs" />
     <Compile Include="..\src\LimitModes.cs" Link="src\LimitModes.cs" />
     <Compile Include="..\src\RowLayout.cs" Link="src\RowLayout.cs" />
+    <Compile Include="..\src\ControlVisibility.cs" Link="src\ControlVisibility.cs" />
+    <Compile Include="..\src\ControlLayout.cs" Link="src\ControlLayout.cs" />
+    <Compile Include="..\src\ChengxinSetup.cs" Link="src\ChengxinSetup.cs" />
     <Compile Include="..\src\Draws\*.cs" LinkBase="src\Draws" />
     <Compile Include="*.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\sdk\Yx.ModSdk.Testing\Yx.ModSdk.Testing.csproj" />
+    <Reference Include="Yx.ModSdk.Core"><HintPath>$(YxSdkDir)netstandard2.0\Yx.ModSdk.Core.dll</HintPath></Reference>
+    <Reference Include="Yx.ModSdk.Testing"><HintPath>$(YxSdkDir)netstandard2.0\Yx.ModSdk.Testing.dll</HintPath></Reference>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />

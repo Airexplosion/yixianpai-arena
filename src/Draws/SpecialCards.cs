@@ -47,7 +47,7 @@ namespace YxArena.Draws
 
         static bool Listed(int category, CardFacts c)
         {
-            return c != null && !c.Obsolete && c.Rarity == 0 && CategoryOf(c) == category;
+            return c != null && !c.Obsolete && CardIds.RarityOf(c.Id) == 0 && CategoryOf(c) == category;
         }
 
         /// <summary>

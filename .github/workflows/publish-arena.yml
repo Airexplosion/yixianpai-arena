@@ -1,0 +1,49 @@
+name: Publish arena package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'releases/*.zip'
+      - 'releases/*.json'
+      - '.github/workflows/publish-arena.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate package
+        shell: python
+        run: |
+          import hashlib, json, pathlib, zipfile
+          manifest = json.loads(pathlib.Path('manifest.json').read_text(encoding='utf-8-sig'))
+          version = manifest['version']
+          package = pathlib.Path('releases') / f"com.yx.arena-{version}.zip"
+          metadata = json.loads((pathlib.Path('releases') / f'{version}.json').read_text(encoding='utf-8-sig'))
+          assert metadata['version'] == version
+          assert hashlib.sha256(package.read_bytes()).hexdigest() == metadata['sha256']
+          with zipfile.ZipFile(package) as archive:
+              assert sorted(archive.namelist()) == ['com.yx.arena/manifest.json', 'com.yx.arena/plugins/Arena.dll']
+              assert json.loads(archive.read('com.yx.arena/manifest.json')) == manifest
+          print(f'Validated arena {version}: {metadata["sha256"]}')
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version=$(python -c "import json; print(json.load(open('manifest.json',encoding='utf-8-sig'))['version'])")
+          tag="v${version}"
+          package="releases/com.yx.arena-${version}.zip"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists; no overwrite performed."
+            exit 0
+          fi
+          gh release create "$tag" "$package" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "练习场 ${version}：阵旗与发牌修复" \
+            --notes-file "releases/${version}.md" --latest

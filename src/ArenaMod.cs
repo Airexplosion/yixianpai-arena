@@ -43,6 +43,10 @@ namespace YxArena
         readonly DamageTally _tally = new DamageTally();
         readonly StepController _step = new StepController();
         ControlBar _bar;
+        readonly ControlVisibility _visibility = new ControlVisibility();
+        readonly ConfigEntry<bool>[] _visibilityEntries = new ConfigEntry<bool>[ControlVisibility.Count];
+        SettingsWindow _settings;
+        ChengxinWindow _sword;
         readonly DealFeed _feed = new DealFeed();
         readonly ControlBarState _barState = new ControlBarState();
         bool _inLobby;
@@ -52,17 +56,27 @@ namespace YxArena
 
         public override void OnLoad(ModContext ctx)
         {
-            Loc.En = ctx.Lang == "en";      // 没有 ModContext 的界面 / 静态帮助类经 Loc.T 取当前语言的文案
+            Loc.En = ctx.Lang == "en";
             // SDK 的界面工具：面板 / 按钮 / 输入框；回调自动兜底（异常记在本 mod 头上）。所有界面类共用这一个。
             _ui = new UiKit(ctx);
             LoadConfig(ctx);
+            for (int i = 0; i < ControlVisibility.Count; i++)
+            {
+                _visibilityEntries[i] = ctx.Config.Bind("visibility", ControlVisibility.Key(i), true, ControlVisibility.Name(i));
+                _visibility.Set(i, _visibilityEntries[i].Value);
+            }
+            _settings = new SettingsWindow(_ui, _visibility, OnToggleControl, OnResetControls);
             _hooks = new OfflineHooks(ctx);
             _hooks.Install();
             _session = new ArenaSession(ctx, _cfg, _hooks);
+            ctx.Services.Register<LocalPractice>(new LocalPractice(_session.SolverReady, _session.SolverPosition));
+            new ReviewEntry(ctx, _session).Install();
             _deal = new DealHook(ctx, _cfg, _session, _feed.Add);
             _deal.Install();
+            _sword = new ChengxinWindow(_ui, _session, _deal, RefreshBar);
             _ready = new ReadyHook(ctx, _hooks, DoFight);
             _ready.Install();
+            new LeaveHook(_hooks.Required, OnLeave);
             _draws = new DrawHooks(ctx, _session);
             _draws.Install();
             _nativeSwitch = new NativeSwitch(ctx, DoSwitchSide);
@@ -76,7 +90,7 @@ namespace YxArena
             _overflow.Enabled = ctx.Data.Get<bool>("overflow", true);
             _battle = new BattleHooks(ctx, _tally, _step, _overflow, _session);
             _battle.Install();
-            _battleBar = new BattleBar(_ui, OnStep, OnTogglePauseAtStart, OnToggleTally);
+            _battleBar = new BattleBar(_ui, OnStep, OnTogglePauseAtStart, OnToggleTally, OnOpenSettings, OnReturnToPlacement, _visibility);
             _tallyOpen = ctx.Data.Get<bool>("tallyOpen", true);
             _tips = new TalentTips(ctx);
             _tips.Install();
@@ -100,6 +114,11 @@ namespace YxArena
             handlers.SetTiPoMax = OnSetTiPoMax;
             handlers.Search = OnSearch;
             handlers.OpenGallery = OnOpenGallery;
+            handlers.OpenQuick = OnOpenQuick;
+            handlers.OpenSettings = OnOpenSettings;
+            handlers.OpenSword = OnOpenSword;
+            handlers.OpenLearned = OnOpenLearned;
+            handlers.Leave = OnLeave;
             handlers.OpenSpecial = OnOpenSpecial;
             handlers.OpenTalents = OnOpenTalents;
             handlers.NextSpecial = OnNextSpecial;
@@ -112,7 +131,7 @@ namespace YxArena
             handlers.TogglePauseAtStart = OnTogglePauseAtStart;
             handlers.ToggleOverflow = OnToggleOverflow;
             handlers.NextLimitMode = OnNextLimitMode;
-            _bar = new ControlBar(_ui, handlers);
+            _bar = new ControlBar(_ui, handlers, _visibility);
 
             // 热键是按钮的后备（自绘按钮不灵时仍能用）。用数字键：CTRL+ALT+字母在中文桌面上常被 QQ / 输入法之类的全局热键
             // 吃掉（0.1.0 的 CTRL+ALT+P 实机按了没反应），CTRL+ALT+数字探针实机用过。id 换了名字，免得沿用存档里的旧绑定。
@@ -140,6 +159,7 @@ namespace YxArena
 
         void SaveConfig()
         {
+            if (_session.FromReview) return;
             Context.Data.Set("char", _cfg.CharacterId);
             Context.Data.Set("level", _cfg.Level);
             Context.Data.Set("dummyHp", _cfg.DummyHp);
@@ -153,7 +173,8 @@ namespace YxArena
         {
             _hooks.Tick();
             _session.Tick();
-            _feed.Tick();
+            _deal.Tick();
+            if (_visibility.Shows(ControlVisibility.Feed)) _feed.Tick();
             _setup.Tick();
             _frame++;
             if (_fightPending) TickOverflow();
@@ -161,13 +182,15 @@ namespace YxArena
             if (_frame % AutosaveFrames == 0) _session.Autosave();
             if (_frame % BattleTickFrames == 0) TickRoom();
             if (_frame % SlowTickFrames != 0) return;
+            SyncVisibility();
             TickLobbyEntry();
             bool show = _session.InPlacement;
             if (show)
             {
                 _nativeSwitch.OffsetX = _switchOffsetX.Value;
                 _nativeSwitch.OffsetY = _switchOffsetY.Value;
-                _nativeSwitch.Ensure(_session.EditingOpponent);
+                if (_visibility.Shows(ControlVisibility.Side)) _nativeSwitch.Ensure(_session.EditingOpponent);
+                else _nativeSwitch.Hide();
             }
             // 换边用游戏自己的「切换」按钮；借不到（钩子不全 / 控件加载失败）时控制栏才画自己的那个。状态变了就重建控制栏。
             if (_bar.NativeSide != _nativeSwitch.Available)
@@ -178,6 +201,8 @@ namespace YxArena
             _bar.SetVisible(show);
             if (!show)
             {
+                _sword.Close();
+                if (!_session.InBattlePhase) _settings.Close();
                 if (_setup.IsOpen && !_room.IsOpen) _setup.Close();
                 return;
             }
@@ -226,6 +251,8 @@ namespace YxArena
 
         public override void OnSceneChanged(GameScene scene)
         {
+            if (_sword != null) _sword.Close();
+            if (_settings != null) _settings.Close();
             _inLobby = scene == GameScene.Lobby;
             if (!_inLobby)
             {
@@ -244,6 +271,8 @@ namespace YxArena
 
         public override void OnDisable()
         {
+            if (_sword != null) _sword.Close();
+            if (_settings != null) _settings.Close();
             if (_limits != null) _limits.Disarm();
             _feed.Destroy();
             if (_battleBar != null) _battleBar.Destroy();
@@ -261,6 +290,7 @@ namespace YxArena
             if (!_bar.IsAlive) return;
             ArenaSide side = _session.Editing;
             _barState.DealMode = _deal.DealMode;
+            _barState.SwordOwner = _deal.IsSwordOwner();
             _barState.Rarity = _cfg.Rarity;
             _barState.Level = side.Level;
             _barState.PlayerFirst = _cfg.PlayerFirst;
@@ -335,6 +365,7 @@ namespace YxArena
 
         void OpenArenaTalents()
         {
+            _sword.Close();
             if (!_session.InPlacement) { Ui.Toast(Context.T("只能在备战界面改仙命", "Talents can only be changed on the setup screen")); return; }
             _session.Autosave();      // 先把界面上的现状（牌、仙命计数）读回设置
             _setup.OpenSlots(_session.EditingIndex, true);
@@ -350,6 +381,12 @@ namespace YxArena
                 // 点的是哪个仙命 → 它在正在编辑的一方的第几个槽 → 直接弹选择框换掉它。对不上（比如点的是对手那排）就开小窗。
                 BattleTalentIconItem icon = h.Instance as BattleTalentIconItem;
                 _session.Autosave();
+                _sword.Close();
+                if (icon != null && icon.talentId == TalentDetails.Learning)
+                {
+                    _setup.OpenLearned(_session.EditingIndex);
+                    return false;
+                }
                 ArenaSide side = _session.Editing;
                 int slot = -1;
                 if (icon != null && icon.talentId > 0)
@@ -375,7 +412,68 @@ namespace YxArena
 
         void OnOpenGallery() { Context.Guard(Context.T("打开图鉴", "Open gallery"), _deal.OpenGallery); }
 
+        void OnOpenQuick()
+        {
+            Context.Guard(Context.T("快捷发牌", "Quick deal"), _deal.OpenQuick);
+            RefreshBar();
+        }
+
+        void OnOpenSettings()
+        {
+            if (!_session.InPlacement && !_session.InBattlePhase) return;
+            _sword.Close();
+            _settings.Open();
+        }
+
+        void OnToggleControl(int index)
+        {
+            _visibilityEntries[index].Value = !_visibilityEntries[index].Value;
+            SyncVisibility();
+        }
+
+        void OnResetControls()
+        {
+            for (int i = 0; i < ControlVisibility.Count; i++) _visibilityEntries[i].Value = true;
+            SyncVisibility();
+        }
+
+        void SyncVisibility()
+        {
+            bool changed = false;
+            for (int i = 0; i < ControlVisibility.Count; i++)
+            {
+                bool value = _visibilityEntries[i].Value;
+                if (_visibility.Shows(i) == value) continue;
+                _visibility.Set(i, value);
+                changed = true;
+            }
+            if (!changed) return;
+            _bar.Destroy();
+            _bar.SetVisible(_session.InPlacement);
+            _battleBar.Destroy();
+            TickBattleBar();
+            if (_session.InPlacement)
+            {
+                if (_visibility.Shows(ControlVisibility.Side)) _nativeSwitch.Ensure(_session.EditingOpponent);
+                else _nativeSwitch.Hide();
+                RefreshBar();
+            }
+            if (!_visibility.Shows(ControlVisibility.Feed)) _feed.Destroy();
+            _settings.Refresh();
+        }
+
         void OnOpenSpecial() { Context.Guard(Context.T("打开特殊牌", "Open special cards"), _deal.OpenSpecial); }
+        void OnOpenSword() { Context.Guard(Context.T("澄心剑", "Chengxin Sword"), OpenSword); }
+        void OpenSword() { _settings.Close(); _setup.Close(); _sword.Open(); }
+        void OnOpenLearned() { Context.Guard(Context.T("编辑悟剑", "Edit learned cards"), OpenLearned); }
+        void OpenLearned()
+        {
+            if (!_session.InPlacement) return;
+            _settings.Close();
+            _sword.Close();
+            _session.Autosave();
+            _setup.OpenLearned(_session.EditingIndex);
+        }
 
         // 输入框失焦也会触发 onEndEdit（比如去点搜出来的牌）：只有按了回车、或者文字变了才重新搜，免得面板被反复刷新。
         void OnSearch(string text)
@@ -421,6 +519,8 @@ namespace YxArena
 
         void StartFight()
         {
+            _sword.Close();
+            _settings.Close();
             _bar.SetVisible(false);
             _session.Fight();
         }
@@ -461,14 +561,27 @@ namespace YxArena
             RefreshBar();
         }
 
+        void OnReturnToPlacement() { Context.Guard(Context.T("回到摆牌", "Back to setup"), DoReturnToPlacement); }
+
+        void DoReturnToPlacement()
+        {
+            if (!_session.InBattlePhase) return;
+            _settings.Close();
+            _fightPending = false;
+            _session.ReturnToPlacement();
+        }
+
         void OnLeave() { Context.Guard(Context.T("回大厅", "Back to lobby"), DoLeave); }
 
         void DoLeave()
         {
+            _sword.Close();
+            _settings.Close();
             Context.Log.Info(Context.T("收到：回大厅", "Received: back to lobby"));
-            _bar.Destroy();
-            _nativeSwitch.Hide();
+            _fightPending = false;
+            _setup.Close();
             _session.Leave();
+            if (_session.State == ArenaSession.StateLeaving) _nativeSwitch.Hide();
         }
 
         void OnToggleDealMode()
@@ -495,6 +608,7 @@ namespace YxArena
 
         void DoNextLevel()
         {
+            _sword.Close();
             _session.NextLevel();
             SaveConfig();
             RefreshBar();
@@ -506,6 +620,7 @@ namespace YxArena
 
         void DoSwitchSide()
         {
+            _sword.Close();
             _session.SwitchSide();
             RefreshBar();
         }

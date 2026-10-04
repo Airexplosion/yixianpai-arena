@@ -3,160 +3,273 @@ using System.Text;
 
 namespace YxArena
 {
-    /// <summary>
-    /// 伤害统计。两方各一份：总伤害（减防前）、实际掉血、本回合伤害、上一张牌、按牌名汇总。
-    /// 伤害记在「当前正在出的那张牌」头上（被它触发的连带效果也算它的）。纯逻辑。
-    /// </summary>
-    public sealed class DamageTally
-    {
-        const int MaxCards = 64;
-        static string Placeholder { get { return Loc.T("（开场 / 其他）", "(start / other)"); } }
+	public sealed class DamageTally
+	{
+		private sealed class SideTally
+		{
+			public long Damage;
 
-        sealed class SideTally
-        {
-            public long Damage;
-            public long HpLoss;
-            public int Turns;
-            public long TurnDamage;
-            public string LastCard = "";
-            public long LastCardDamage;
-            public long MaxHit;
-            public string MaxHitCard = "";
-            public readonly string[] Names = new string[MaxCards];
-            public readonly long[] Totals = new long[MaxCards];
-            public readonly int[] Plays = new int[MaxCards];
-            public int Count;
-            public int Current = -1;
-        }
+			public long HpLoss;
 
-        readonly SideTally[] _sides = { new SideTally(), new SideTally() };
+			public int Turns;
 
-        static string N(int value) { return value.ToString(CultureInfo.InvariantCulture); }
+			public long TurnDamage;
 
-        /// <summary>千位分组（统计会超过 21 亿，一长串数字不分组没法读）。自己拼，不依赖格式串。</summary>
-        public static string Group(long value)
-        {
-            string digits = value.ToString(CultureInfo.InvariantCulture);
-            bool negative = digits.Length > 0 && digits[0] == (char)45;
-            if (negative) digits = digits.Substring(1);
-            var sb = new StringBuilder();
-            if (negative) sb.Append((char)45);
-            int lead = digits.Length % 3;
-            if (lead > 0) sb.Append(digits.Substring(0, lead));
-            for (int i = lead; i < digits.Length; i += 3)
-            {
-                if (sb.Length > (negative ? 1 : 0)) sb.Append((char)44);
-                sb.Append(digits.Substring(i, 3));
-            }
-            return sb.ToString();
-        }
+			public string LastCard = "";
 
-        public void Reset()
-        {
-            _sides[0] = new SideTally();
-            _sides[1] = new SideTally();
-        }
+			public long LastCardDamage;
 
-        SideTally Side(int side)
-        {
-            return side == 0 || side == 1 ? _sides[side] : null;
-        }
+			public long MaxHit;
 
-        public void BeginTurn(int side)
-        {
-            SideTally s = Side(side);
-            if (s == null) return;
-            s.Turns++;
-            s.TurnDamage = 0;
-        }
+			public string MaxHitCard = "";
 
-        static int Slot(SideTally s, string name)
-        {
-            for (int i = 0; i < s.Count; i++) if (s.Names[i] == name) return i;
-            if (s.Count >= MaxCards) return MaxCards - 1;
-            s.Names[s.Count] = name;
-            s.Count++;
-            return s.Count - 1;
-        }
+			public readonly string[] Names = new string[64];
 
-        public void BeginCard(int side, string cardName)
-        {
-            SideTally s = Side(side);
-            if (s == null) return;
-            string name = string.IsNullOrEmpty(cardName) ? Placeholder : cardName;
-            s.Current = Slot(s, name);
-            s.Plays[s.Current]++;
-            s.LastCard = name;
-            s.LastCardDamage = 0;
-        }
+			public readonly long[] Totals = new long[64];
 
-        /// <param name="damage">减防前的伤害（64 位：溢出的那一击用 SatMath 记下的真值）。</param>
-        /// <param name="hpLoss">实际掉的血。</param>
-        public void AddDamage(int side, long damage, long hpLoss)
-        {
-            SideTally s = Side(side);
-            if (s == null) return;
-            if (s.Current < 0) s.Current = Slot(s, Placeholder);
-            long d = damage < 0L ? 0L : damage;
-            s.Damage += d;
-            s.HpLoss += hpLoss < 0L ? 0L : hpLoss;
-            if (d > s.MaxHit)
-            {
-                s.MaxHit = d;
-                s.MaxHitCard = s.Names[s.Current];
-            }
-            s.TurnDamage += d;
-            s.LastCardDamage += d;
-            s.Totals[s.Current] += d;
-        }
+			public readonly int[] Plays = new int[64];
 
-        public long TotalDamage(int side) { SideTally s = Side(side); return s != null ? s.Damage : 0L; }
+			public int Count;
 
-        public long TotalHpLoss(int side) { SideTally s = Side(side); return s != null ? s.HpLoss : 0L; }
+			public int Current = -1;
+		}
 
-        public long MaxHit(int side) { SideTally s = Side(side); return s != null ? s.MaxHit : 0L; }
+		private const int MaxCards = 64;
 
-        public string MaxHitCard(int side) { SideTally s = Side(side); return s != null ? s.MaxHitCard : ""; }
+		private readonly SideTally[] _sides = new SideTally[2]
+		{
+			new SideTally(),
+			new SideTally()
+		};
 
-        public int Turns(int side) { SideTally s = Side(side); return s != null ? s.Turns : 0; }
+		private static string Placeholder => Loc.T("（开场 / 其他）", "(start / other)");
 
-        public long TurnDamage(int side) { SideTally s = Side(side); return s != null ? s.TurnDamage : 0L; }
+		private static string N(int value)
+		{
+			return value.ToString(CultureInfo.InvariantCulture);
+		}
 
-        public string LastCard(int side) { SideTally s = Side(side); return s != null ? s.LastCard : ""; }
+		public static string Group(long value)
+		{
+			string text = value.ToString(CultureInfo.InvariantCulture);
+			bool flag = text.Length > 0 && text[0] == '-';
+			if (flag)
+			{
+				text = text.Substring(1);
+			}
+			StringBuilder stringBuilder = new StringBuilder();
+			if (flag)
+			{
+				stringBuilder.Append('-');
+			}
+			int num = text.Length % 3;
+			if (num > 0)
+			{
+				stringBuilder.Append(text.Substring(0, num));
+			}
+			for (int i = num; i < text.Length; i += 3)
+			{
+				if (stringBuilder.Length > (flag ? 1 : 0))
+				{
+					stringBuilder.Append(',');
+				}
+				stringBuilder.Append(text.Substring(i, 3));
+			}
+			return stringBuilder.ToString();
+		}
 
-        public long LastCardDamage(int side) { SideTally s = Side(side); return s != null ? s.LastCardDamage : 0L; }
+		public void Reset()
+		{
+			_sides[0] = new SideTally();
+			_sides[1] = new SideTally();
+		}
 
-        /// <summary>一方的统计文本：总计 + 伤害最高的若干张牌。</summary>
-        public string Render(int side, string sideName, int topCards)
-        {
-            SideTally s = Side(side);
-            if (s == null) return "";
-            var sb = new StringBuilder();
-            sb.Append(sideName).Append(Loc.T("　总伤害 ", "  Total dmg ")).Append(Group(s.Damage)).Append(Loc.T("（掉血 ", " (HP lost ")).Append(Group(s.HpLoss)).Append(Loc.T("）", ")"));
-            if (s.MaxHit > 0L) sb.Append((char)10).Append(Loc.T("最大一击 ", "Max hit ")).Append(Group(s.MaxHit)).Append(Loc.T("（", " (")).Append(s.MaxHitCard).Append(Loc.T("）", ")"));
-            sb.Append((char)10).Append(Loc.T("第 ", "Round ")).Append(N(s.Turns)).Append(Loc.T(" 回合 ", " dmg ")).Append(Group(s.TurnDamage));
-            if (s.LastCard.Length > 0) sb.Append(Loc.T("　上一张 ", "  Last ")).Append(s.LastCard).Append(" ").Append(Group(s.LastCardDamage));
+		private SideTally Side(int side)
+		{
+			if (side != 0 && side != 1)
+			{
+				return null;
+			}
+			return _sides[side];
+		}
 
-            var order = new int[s.Count];
-            for (int i = 0; i < s.Count; i++) order[i] = i;
-            for (int i = 1; i < order.Length; i++)
-            {
-                int value = order[i];
-                int j = i - 1;
-                while (j >= 0 && s.Totals[order[j]] < s.Totals[value]) { order[j + 1] = order[j]; j--; }
-                order[j + 1] = value;
-            }
-            int shown = 0;
-            for (int i = 0; i < order.Length && shown < topCards; i++)
-            {
-                int slot = order[i];
-                if (s.Totals[slot] <= 0L) continue;
-                sb.Append((char)10).Append("  ").Append(s.Names[slot]);
-                if (s.Plays[slot] > 1) sb.Append(" ×").Append(N(s.Plays[slot]));
-                sb.Append(Loc.T("　", "  ")).Append(Group(s.Totals[slot]));
-                shown++;
-            }
-            return sb.ToString();
-        }
-    }
+		public void BeginTurn(int side)
+		{
+			SideTally sideTally = Side(side);
+			if (sideTally != null)
+			{
+				sideTally.Turns++;
+				sideTally.TurnDamage = 0L;
+			}
+		}
+
+		private static int Slot(SideTally s, string name)
+		{
+			for (int i = 0; i < s.Count; i++)
+			{
+				if (s.Names[i] == name)
+				{
+					return i;
+				}
+			}
+			if (s.Count >= 64)
+			{
+				return 63;
+			}
+			s.Names[s.Count] = name;
+			s.Count++;
+			return s.Count - 1;
+		}
+
+		public void BeginCard(int side, string cardName)
+		{
+			SideTally sideTally = Side(side);
+			if (sideTally != null)
+			{
+				string text = (string.IsNullOrEmpty(cardName) ? Placeholder : cardName);
+				sideTally.Current = Slot(sideTally, text);
+				sideTally.Plays[sideTally.Current]++;
+				sideTally.LastCard = text;
+				sideTally.LastCardDamage = 0L;
+			}
+		}
+
+		public void AddDamage(int side, long damage, long hpLoss)
+		{
+			SideTally sideTally = Side(side);
+			if (sideTally != null)
+			{
+				if (sideTally.Current < 0)
+				{
+					sideTally.Current = Slot(sideTally, Placeholder);
+				}
+				long num = ((damage < 0) ? 0 : damage);
+				sideTally.Damage += num;
+				sideTally.HpLoss += ((hpLoss < 0) ? 0 : hpLoss);
+				if (num > sideTally.MaxHit)
+				{
+					sideTally.MaxHit = num;
+					sideTally.MaxHitCard = sideTally.Names[sideTally.Current];
+				}
+				sideTally.TurnDamage += num;
+				sideTally.LastCardDamage += num;
+				sideTally.Totals[sideTally.Current] += num;
+			}
+		}
+
+		public long TotalDamage(int side)
+		{
+			return Side(side)?.Damage ?? 0;
+		}
+
+		public long TotalHpLoss(int side)
+		{
+			return Side(side)?.HpLoss ?? 0;
+		}
+
+		public long MaxHit(int side)
+		{
+			return Side(side)?.MaxHit ?? 0;
+		}
+
+		public string MaxHitCard(int side)
+		{
+			SideTally sideTally = Side(side);
+			if (sideTally == null)
+			{
+				return "";
+			}
+			return sideTally.MaxHitCard;
+		}
+
+		public int Turns(int side)
+		{
+			return Side(side)?.Turns ?? 0;
+		}
+
+		public long TurnDamage(int side)
+		{
+			return Side(side)?.TurnDamage ?? 0;
+		}
+
+		public string LastCard(int side)
+		{
+			SideTally sideTally = Side(side);
+			if (sideTally == null)
+			{
+				return "";
+			}
+			return sideTally.LastCard;
+		}
+
+		public long LastCardDamage(int side)
+		{
+			return Side(side)?.LastCardDamage ?? 0;
+		}
+
+		public string Render(int side, string sideName, int topCards)
+		{
+			SideTally sideTally = Side(side);
+			if (sideTally == null)
+			{
+				return "";
+			}
+			StringBuilder stringBuilder = new StringBuilder();
+			stringBuilder.Append(sideName).Append(Loc.T("\u3000总伤害 ", "  Total dmg ")).Append(Group(sideTally.Damage))
+				.Append(Loc.T("（掉血 ", " (HP lost "))
+				.Append(Group(sideTally.HpLoss))
+				.Append(Loc.T("）", ")"));
+			if (sideTally.MaxHit > 0)
+			{
+				stringBuilder.Append('\n').Append(Loc.T("最大一击 ", "Max hit ")).Append(Group(sideTally.MaxHit))
+					.Append(Loc.T("（", " ("))
+					.Append(sideTally.MaxHitCard)
+					.Append(Loc.T("）", ")"));
+			}
+			stringBuilder.Append('\n').Append(Loc.T("第 ", "Round ")).Append(N(sideTally.Turns))
+				.Append(Loc.T(" 回合 ", " dmg "))
+				.Append(Group(sideTally.TurnDamage));
+			if (sideTally.LastCard.Length > 0)
+			{
+				stringBuilder.Append(Loc.T("\u3000上一张 ", "  Last ")).Append(sideTally.LastCard).Append(" ")
+					.Append(Group(sideTally.LastCardDamage));
+			}
+			int[] array = new int[sideTally.Count];
+			for (int i = 0; i < sideTally.Count; i++)
+			{
+				array[i] = i;
+			}
+			for (int j = 1; j < array.Length; j++)
+			{
+				int num = array[j];
+				int num2 = j - 1;
+				while (num2 >= 0 && sideTally.Totals[array[num2]] < sideTally.Totals[num])
+				{
+					array[num2 + 1] = array[num2];
+					num2--;
+				}
+				array[num2 + 1] = num;
+			}
+			int num3 = 0;
+			for (int k = 0; k < array.Length; k++)
+			{
+				if (num3 >= topCards)
+				{
+					break;
+				}
+				int num4 = array[k];
+				if (sideTally.Totals[num4] > 0)
+				{
+					stringBuilder.Append('\n').Append("  ").Append(sideTally.Names[num4]);
+					if (sideTally.Plays[num4] > 1)
+					{
+						stringBuilder.Append(" ×").Append(N(sideTally.Plays[num4]));
+					}
+					stringBuilder.Append(Loc.T("\u3000", "  ")).Append(Group(sideTally.Totals[num4]));
+					num3++;
+				}
+			}
+			return stringBuilder.ToString();
+		}
+	}
 }

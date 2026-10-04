@@ -9,142 +9,194 @@ using Yx.Shared;
 
 namespace YxArena.Game
 {
-    /// <summary>
-    /// 给游戏的全仙命选择框（SelectInfoPanel）补上悬停说明：那个选择框的格子（SelectInfoCell）只有放大动画，没有说明。
-    ///   SelectInfoCell.UpdateContent/1  前置：记下「这个格子现在显示的是哪个仙命」（格子是循环复用的，数据不对外暴露）
-    ///   SelectInfoCell.OnPointerEnter/1 后置：弹游戏自己的仙命说明框（TalentDescriptionPanel，和别处悬停仙命图标弹的是同一个）
-    ///   SelectInfoCell.OnPointerExit/1  后置：收起
-    /// 说明框贴在【整个选择框】的右侧，并且不拦截鼠标。0.10.1 贴在格子左侧：最左一列的格子会被说明框盖住、点不到
-    /// （用户实机）；贴在格子右侧又会盖住右边几列，所以拿整个框当锚点。不拦截鼠标是保险：屏幕边上挤得重叠了也照样能点到格子。
-    /// 这个选择框游戏自己已经不用了，只有练习场会打开它，所以这几个钩子不需要「在不在练习场」的判断。
-    /// </summary>
-    public sealed class TalentTips
-    {
-        const int MaxCells = 128;
+	public sealed class TalentTips
+	{
+		private const int MaxCells = 128;
 
-        readonly ModContext _ctx;
-        readonly List<SelectInfoCell> _cells = new List<SelectInfoCell>();
-        readonly List<int> _talents = new List<int>();
-        bool _broken;
+		private readonly ModContext _ctx;
 
-        public TalentTips(ModContext ctx)
-        {
-            _ctx = ctx;
-        }
+		private readonly List<SelectInfoCell> _cells = new List<SelectInfoCell>();
 
-        public void Install()
-        {
-            HookGroup group = _ctx.Hooks.Group("仙命悬停说明");
-            group.Prefix("SelectInfoCell", "UpdateContent", 1, OnUpdateContent);
-            group.Postfix("SelectInfoCell", "OnPointerEnter", 1, OnEnter);
-            group.Postfix("SelectInfoCell", "OnPointerExit", 1, OnExit);
-            if (group.Complete) return;
-            group.CancelAll();
-            _broken = true;
-            _ctx.Log.Warn(_ctx.T("仙命选择框的悬停说明不可用", "Talent picker hover tooltips unavailable"));
-        }
+		private readonly List<int> _talents = new List<int>();
 
-        void Fail(string where, Exception e)
-        {
-            if (!_broken) _ctx.Log.Error(_ctx.T("仙命悬停说明 " + where + " 出错（之后不再显示说明）", "Talent hover tooltip " + where + " failed (tooltips disabled from now on)"), e);
-            _broken = true;
-        }
+		private bool _broken;
 
-        int IndexOf(SelectInfoCell cell)
-        {
-            for (int i = 0; i < _cells.Count; i++) if (object.ReferenceEquals(_cells[i], cell)) return i;
-            return -1;
-        }
+		public TalentTips(ModContext ctx)
+		{
+			_ctx = ctx;
+		}
 
-        bool OnUpdateContent(HookContext h)
-        {
-            if (_broken) return true;
-            try
-            {
-                SelectInfoCell cell = h.Instance as SelectInfoCell;
-                SelectInfoCell.CellData data = h.Args != null && h.Args.Length > 0 ? h.Args[0] as SelectInfoCell.CellData : null;
-                if (cell == null || data == null) return true;
-                int talent = data.infoType == SelectInfoType.仙命 && data.param > 0 ? data.param : 0;
-                int index = IndexOf(cell);
-                if (index >= 0) { _talents[index] = talent; return true; }
-                if (_cells.Count >= MaxCells) { _cells.Clear(); _talents.Clear(); }     // 场景换过，旧格子都没了
-                _cells.Add(cell);
-                _talents.Add(talent);
-            }
-            catch (Exception e) { Fail("UpdateContent", e); }
-            return true;
-        }
+		public void Install()
+		{
+			HookGroup hookGroup = _ctx.Hooks.Group("仙命悬停说明");
+			hookGroup.Prefix("SelectInfoCell", "UpdateContent", 1, OnUpdateContent);
+			hookGroup.Postfix("SelectInfoCell", "OnPointerEnter", 1, OnEnter);
+			hookGroup.Postfix("SelectInfoCell", "OnPointerExit", 1, OnExit);
+			if (!hookGroup.Complete)
+			{
+				hookGroup.CancelAll();
+				_broken = true;
+				_ctx.Log.Warn(_ctx.T("仙命选择框的悬停说明不可用", "Talent picker hover tooltips unavailable"));
+			}
+		}
 
-        static TalentDescriptionPanel FindPanel()
-        {
-            TooltipsPanel tips = ILRPanelBase.FindILRPanel<TooltipsPanel>();
-            return tips != null ? tips.FindILRSubPanel<TalentDescriptionPanel>() : null;
-        }
+		private void Fail(string where, Exception e)
+		{
+			if (!_broken)
+			{
+				_ctx.Log.Error(_ctx.T("仙命悬停说明 " + where + " 出错（之后不再显示说明）", "Talent hover tooltip " + where + " failed (tooltips disabled from now on)"), e);
+			}
+			_broken = true;
+		}
 
-        void OnEnter(HookContext h)
-        {
-            if (_broken) return;
-            try
-            {
-                SelectInfoCell cell = h.Instance as SelectInfoCell;
-                int index = cell != null ? IndexOf(cell) : -1;
-                int talent = index >= 0 ? _talents[index] : 0;
-                if (talent <= 0) return;
-                TalentConfig config = ConfigManager.GetTalentConfig(talent);
-                TalentDescriptionPanel panel = FindPanel();
-                if (config == null || panel == null) return;
-                var title = new StringBuilder();
-                title.Append(config.GetName()).Append((char)10).Append(TranslateUtil.GetLevelTranslate(config.level));
-                RectTransform anchor = FrameOf(cell.transform) ?? cell.transform as RectTransform;
-                panel.ShowBox(anchor, title.ToString(), config.ParseDescription(GameMode.InvalidGameMode), talent, TooltipBoxAlignment.Right, false);
-                SetBlocking(panel, false);
-            }
-            catch (Exception e) { Fail("OnPointerEnter", e); }
-        }
+		private int IndexOf(SelectInfoCell cell)
+		{
+			for (int i = 0; i < _cells.Count; i++)
+			{
+				if (_cells[i] == cell)
+				{
+					return i;
+				}
+			}
+			return -1;
+		}
 
-        void OnExit(HookContext h)
-        {
-            Hide();
-        }
+		private bool OnUpdateContent(HookContext h)
+		{
+			if (_broken)
+			{
+				return true;
+			}
+			try
+			{
+				SelectInfoCell selectInfoCell = h.Instance as SelectInfoCell;
+				SelectInfoCell.CellData cellData = ((h.Args != null && h.Args.Length != 0) ? (h.Args[0] as SelectInfoCell.CellData) : null);
+				if (selectInfoCell == null || cellData == null)
+				{
+					return true;
+				}
+				int num = ((cellData.infoType == SelectInfoType.仙命 && cellData.param > 0) ? cellData.param : 0);
+				int num2 = IndexOf(selectInfoCell);
+				if (num2 >= 0)
+				{
+					_talents[num2] = num;
+					return true;
+				}
+				if (_cells.Count >= 128)
+				{
+					_cells.Clear();
+					_talents.Clear();
+				}
+				_cells.Add(selectInfoCell);
+				_talents.Add(num);
+			}
+			catch (Exception e)
+			{
+				Fail("UpdateContent", e);
+			}
+			return true;
+		}
 
-        /// <summary>格子所在的那个选择框的外框（名字叫 Box 的祖先）。</summary>
-        static RectTransform FrameOf(Transform cell)
-        {
-            Transform t = cell;
-            for (int i = 0; i < 12 && t != null; i++)
-            {
-                if (t.name == "Box") return t as RectTransform;
-                t = t.parent;
-            }
-            return null;
-        }
+		private static TalentDescriptionPanel FindPanel()
+		{
+			return ILRPanelBase.FindILRPanel<TooltipsPanel>()?.FindILRSubPanel<TalentDescriptionPanel>();
+		}
 
-        /// <summary>说明框拦不拦鼠标。我们显示时不拦；收起时放回去，别影响游戏别处用它。</summary>
-        static void SetBlocking(TalentDescriptionPanel panel, bool blocking)
-        {
-            if (panel == null || panel.transform == null) return;
-            GameObject go = panel.transform.gameObject;
-            CanvasGroup group = go.GetComponent(typeof(CanvasGroup)) as CanvasGroup;
-            if (group == null)
-            {
-                if (blocking) return;
-                group = go.AddComponent(typeof(CanvasGroup)) as CanvasGroup;
-            }
-            group.blocksRaycasts = blocking;
-        }
+		private void OnEnter(HookContext h)
+		{
+			if (_broken)
+			{
+				return;
+			}
+			try
+			{
+				SelectInfoCell selectInfoCell = h.Instance as SelectInfoCell;
+				int num = ((selectInfoCell != null) ? IndexOf(selectInfoCell) : (-1));
+				int num2 = ((num >= 0) ? _talents[num] : 0);
+				if (num2 > 0)
+				{
+					TalentConfig talentConfig = ConfigManager.GetTalentConfig(num2);
+					TalentDescriptionPanel talentDescriptionPanel = FindPanel();
+					if (talentConfig != null && talentDescriptionPanel != null)
+					{
+						StringBuilder stringBuilder = new StringBuilder();
+						stringBuilder.Append(talentConfig.GetName()).Append('\n').Append(TranslateUtil.GetLevelTranslate(talentConfig.level));
+						RectTransform targetRT = FrameOf(selectInfoCell.transform) ?? (selectInfoCell.transform as RectTransform);
+						talentDescriptionPanel.ShowBox(targetRT, stringBuilder.ToString(), ConfigExtension.ParseDescription(talentConfig, GameMode.InvalidGameMode), num2);
+						SetBlocking(talentDescriptionPanel, blocking: false);
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				Fail("OnPointerEnter", e);
+			}
+		}
 
-        /// <summary>收起说明框（选完仙命、选择框关掉时也调一下）。</summary>
-        public void Hide()
-        {
-            if (_broken) return;
-            try
-            {
-                TalentDescriptionPanel panel = FindPanel();
-                if (panel == null) return;
-                SetBlocking(panel, true);
-                if (panel.panel != null && panel.panel.isShow) panel.Hide();
-            }
-            catch (Exception e) { Fail("Hide", e); }
-        }
-    }
+		private void OnExit(HookContext h)
+		{
+			Hide();
+		}
+
+		private static RectTransform FrameOf(Transform cell)
+		{
+			Transform transform = cell;
+			for (int i = 0; i < 12; i++)
+			{
+				if (!(transform != null))
+				{
+					break;
+				}
+				if (transform.name == "Box")
+				{
+					return transform as RectTransform;
+				}
+				transform = transform.parent;
+			}
+			return null;
+		}
+
+		private static void SetBlocking(TalentDescriptionPanel panel, bool blocking)
+		{
+			if (panel == null || panel.transform == null)
+			{
+				return;
+			}
+			GameObject gameObject = panel.transform.gameObject;
+			CanvasGroup canvasGroup = gameObject.GetComponent(typeof(CanvasGroup)) as CanvasGroup;
+			if (canvasGroup == null)
+			{
+				if (blocking)
+				{
+					return;
+				}
+				canvasGroup = gameObject.AddComponent(typeof(CanvasGroup)) as CanvasGroup;
+			}
+			canvasGroup.blocksRaycasts = blocking;
+		}
+
+		public void Hide()
+		{
+			if (_broken)
+			{
+				return;
+			}
+			try
+			{
+				TalentDescriptionPanel talentDescriptionPanel = FindPanel();
+				if (talentDescriptionPanel != null)
+				{
+					SetBlocking(talentDescriptionPanel, blocking: true);
+					if (talentDescriptionPanel.panel != null && talentDescriptionPanel.panel.isShow)
+					{
+						talentDescriptionPanel.Hide();
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				Fail("Hide", e);
+			}
+		}
+	}
 }

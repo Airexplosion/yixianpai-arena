@@ -1,0 +1,7 @@
+<Project>
+  <Import Project="..\yixianpai-mod-sdk\Directory.Build.props" />
+  <PropertyGroup>
+    <YxSdkDir>$(MSBuildThisFileDirectory)..\yixianpai-mod-sdk\sdk\</YxSdkDir>
+    <YxRefs>$(MSBuildThisFileDirectory)..\yixianpai-mod-sdk\refs\</YxRefs>
+  </PropertyGroup>
+</Project>

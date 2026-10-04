@@ -26,11 +26,13 @@ namespace YxArena.Tests
         }
 
         [Fact]
-        public void NextRarity_cycles_zero_one_two()
+        public void NextRarity_cycles_all_five_supported_levels()
         {
             var cfg = new ArenaConfig();
             Assert.Equal(1, cfg.NextRarity());
             Assert.Equal(2, cfg.NextRarity());
+            Assert.Equal(3, cfg.NextRarity());
+            Assert.Equal(4, cfg.NextRarity());
             Assert.Equal(0, cfg.NextRarity());
         }
 

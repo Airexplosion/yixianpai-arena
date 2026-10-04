@@ -52,6 +52,8 @@ namespace YxArena
                 case 0: return Loc.T("1 级", "Lv.1");
                 case 1: return Loc.T("2 级", "Lv.2");
                 case 2: return Loc.T("3 级", "Lv.3");
+                case 3: return Loc.T("4 级", "Lv.4");
+                case 4: return Loc.T("5 级", "Lv.5");
                 default: return "?";
             }
         }

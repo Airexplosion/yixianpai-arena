@@ -23,6 +23,7 @@ namespace YxArena.Draws
         public int Rarity;
         public int Subcategory;
         public int Owner;
+        public int[] SeasonMechanics = new int[0];
         public bool Hidden;
         public bool Obsolete;
         public bool ActionAgain;

@@ -25,6 +25,9 @@ namespace YxArena.Views
         readonly Action _onStep;
         readonly Action _onTogglePauseAtStart;
         readonly Action _onToggleTally;
+        readonly Action _onSettings;
+        readonly Action _onLeave;
+        readonly ControlVisibility _visibility;
         GameObject _root;
         GameObject _window;
         UiButton _step;
@@ -36,12 +39,15 @@ namespace YxArena.Views
 
         readonly UiKit _ui;
 
-        public BattleBar(UiKit ui, Action onStep, Action onTogglePauseAtStart, Action onToggleTally)
+        public BattleBar(UiKit ui, Action onStep, Action onTogglePauseAtStart, Action onToggleTally, Action onSettings, Action onReturnToPlacement, ControlVisibility visibility)
         {
             _ui = ui;
             _onStep = onStep;
             _onTogglePauseAtStart = onTogglePauseAtStart;
             _onToggleTally = onToggleTally;
+            _onSettings = onSettings;
+            _onLeave = onReturnToPlacement;
+            _visibility = visibility;
         }
 
         public void SetVisible(bool visible)
@@ -63,15 +69,34 @@ namespace YxArena.Views
         {
             var top = new Vector2(0.5f, 1f);
             var background = new Color(0f, 0f, 0f, 0.6f);
-            float width = Pad * 2f + ButtonWidth * 3f + Gap * 2f;
+            int count = 1;
+            if (_visibility.Shows(ControlVisibility.Step)) count++;
+            if (_visibility.Shows(ControlVisibility.BattlePause)) count++;
+            if (_visibility.Shows(ControlVisibility.Tally)) count++;
+            if (_visibility.Shows(ControlVisibility.BattleLeave)) count++;
+            float width = Pad * 2f + ButtonWidth * count + Gap * (count - 1);
             _root = _ui.Panel("YxArenaBattleBar", top, top, new Vector2(0f, -4f), new Vector2(width, RowHeight + Pad * 2f), background);
             if (_root == null) return;
             float x = Pad;
-            _step = _ui.TextButton(_root.transform, "step", Loc.T("步进 ▶|", "Step ▶|"), new Vector2(x, -Pad), new Vector2(ButtonWidth, RowHeight), _onStep);
+            _ui.TextButton(_root.transform, "settings", Loc.T("设置", "Settings"), new Vector2(x, -Pad), new Vector2(ButtonWidth, RowHeight), _onSettings);
             x += ButtonWidth + Gap;
-            _pauseAtStart = _ui.TextButton(_root.transform, "pauseAtStart", "", new Vector2(x, -Pad), new Vector2(ButtonWidth, RowHeight), _onTogglePauseAtStart);
-            x += ButtonWidth + Gap;
-            _tallyToggle = _ui.TextButton(_root.transform, "tally", "", new Vector2(x, -Pad), new Vector2(ButtonWidth, RowHeight), _onToggleTally);
+            if (_visibility.Shows(ControlVisibility.Step))
+            {
+                _step = _ui.TextButton(_root.transform, "step", Loc.T("步进 ▶|", "Step ▶|"), new Vector2(x, -Pad), new Vector2(ButtonWidth, RowHeight), _onStep);
+                x += ButtonWidth + Gap;
+            }
+            if (_visibility.Shows(ControlVisibility.BattlePause))
+            {
+                _pauseAtStart = _ui.TextButton(_root.transform, "pauseAtStart", "", new Vector2(x, -Pad), new Vector2(ButtonWidth, RowHeight), _onTogglePauseAtStart);
+                x += ButtonWidth + Gap;
+            }
+            if (_visibility.Shows(ControlVisibility.Tally))
+            {
+                _tallyToggle = _ui.TextButton(_root.transform, "tally", "", new Vector2(x, -Pad), new Vector2(ButtonWidth, RowHeight), _onToggleTally);
+                x += ButtonWidth + Gap;
+            }
+            if (_visibility.Shows(ControlVisibility.BattleLeave))
+                _ui.TextButton(_root.transform, "leave", Loc.T("回到摆牌", "Back to setup"), new Vector2(x, -Pad), new Vector2(ButtonWidth, RowHeight), _onLeave);
 
             var right = new Vector2(1f, 0.5f);
             _window = _ui.Panel("YxArenaTallyWindow", right, right, new Vector2(-12f, 0f), new Vector2(WindowWidth, WindowHeight), new Color(0f, 0f, 0f, 0.72f));
@@ -87,10 +112,13 @@ namespace YxArena.Views
         public void Refresh(bool stepAvailable, bool pauseAtStart, bool paused, bool tallyOpen, string tallyText)
         {
             if (_root == null) return;
-            _step.SetText(paused ? Loc.T("步进 ▶|  ‖", "Step ▶|  ‖") : Loc.T("步进 ▶|", "Step ▶|"));
-            _step.SetInteractable(stepAvailable);
-            _pauseAtStart.SetText(pauseAtStart ? Loc.T("开场暂停：开", "Pause at start: on") : Loc.T("开场暂停：关", "Pause at start: off"));
-            _tallyOpen = tallyOpen && !string.IsNullOrEmpty(tallyText);
+            if (_step != null)
+            {
+                _step.SetText(paused ? Loc.T("步进 ▶|  ‖", "Step ▶|  ‖") : Loc.T("步进 ▶|", "Step ▶|"));
+                _step.SetInteractable(stepAvailable);
+            }
+            if (_pauseAtStart != null) _pauseAtStart.SetText(pauseAtStart ? Loc.T("开场暂停：开", "Pause at start: on") : Loc.T("开场暂停：关", "Pause at start: off"));
+            _tallyOpen = _visibility.Shows(ControlVisibility.Tally) && tallyOpen && !string.IsNullOrEmpty(tallyText);
             if (_tallyToggle != null) _tallyToggle.SetText(tallyOpen ? Loc.T("伤害统计 ▶", "Damage ▶") : Loc.T("◀ 伤害统计", "◀ Damage"));
             ApplyWindow();
             if (_tally != null && _tallyOpen) _tally.text = tallyText;
@@ -103,6 +131,7 @@ namespace YxArena.Views
             _root = null;
             _window = null;
             _tally = null;
+            _step = _pauseAtStart = _tallyToggle = null;
         }
     }
 }

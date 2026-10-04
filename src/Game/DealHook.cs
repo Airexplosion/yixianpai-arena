@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Reflection;
 using Proto;
 using Yx.ModSdk;
 using Yx.ModSdk.Unity;
@@ -34,6 +35,8 @@ namespace YxArena.Game
         public bool DealMode = true;
         public int SpecialCategory = SpecialCards.Dream;
         CardFacts[] _allFacts;
+        List<CardConfig> _requestedCards;
+        object _specificPanel;
         public bool Installed;
         public int Dealt;
 
@@ -50,6 +53,151 @@ namespace YxArena.Game
         {
             Installed = _ctx.Hooks.TryPrefix("IllustrationCardItem", "OnPointerClick", 1, OnCardClick) != null;
             if (!Installed) _ctx.Log.Warn(_ctx.T("图鉴点牌钩子没挂上：发牌用不了", "Gallery click hook not installed: dealing is unavailable"));
+            var specific = _ctx.Hooks.Group("特殊牌列表显示");
+            specific.Prefix("SpecificCardIllustrationPanel", "Show", 1, OnSpecificShow);
+            specific.Prefix("SpecificCardIllustrationPanel", "Refresh", 0, BeginSpecificRefresh);
+            if (!specific.Complete)
+            {
+                specific.CancelAll();
+                _ctx.Log.Warn(_ctx.T("特殊牌列表修复未启用，澄心剑请用专属面板直接发牌", "Special list fix unavailable; deal the sword from its dedicated panel"));
+            }
+            var gallery = _ctx.Hooks.Group("发牌图鉴当前赛季");
+            gallery.Prefix("CardIllustrationPanel", "OnSetType", 2, BeginGalleryQuery);
+            if (!gallery.Complete)
+            {
+                gallery.CancelAll();
+                _ctx.Log.Warn(_ctx.T("图鉴赛季修复未启用，请用快捷发牌或搜索。", "Gallery season fix unavailable; use Quick deal or Search."));
+            }
+        }
+
+        bool BeginGalleryQuery(HookContext h)
+        {
+            if (!ArenaSession.Active || !_session.InPlacement || h.Args == null || h.Args.Length != 2) return true;
+            CardIllustrationPanel panel = h.Instance as CardIllustrationPanel;
+            if (panel == null) return true;
+            try
+            {
+                int type = (int)(CardIllustrationType)h.Args[0];
+                int detail = (int)h.Args[1];
+                int season = (int)OpenManager.seasonMec;
+                CardFacts[] facts = AllFacts();
+                var cards = new List<CardConfig>();
+                for (int i = 0; i < facts.Length; i++)
+                    if (GalleryCards.Matches(facts[i], type, detail, season))
+                    {
+                        CardConfig config = CardFactory.FindCardConfig(facts[i].Id);
+                        if (config != null) cards.Add(config);
+                    }
+                var scroll = panel.FindComponent<UnityEngine.UI.ScrollRect>("ScrollView");
+                if (scroll != null) { scroll.content.anchoredPosition = UnityEngine.Vector2.zero; scroll.StopMovement(); }
+                if (!RenderRows(panel, cards)) return true;
+                _ctx.Log.Info(_ctx.T("发牌图鉴：", "Card gallery: ") + type + "/" + detail + " season=" + season + " cards=" + cards.Count);
+                h.Skip(null);
+                return false;
+            }
+            catch (Exception e)
+            {
+                _ctx.Log.Warn(_ctx.T("发牌图鉴刷新失败：", "Card gallery refresh failed: ") + e.Message);
+                return true;
+            }
+        }
+
+        public void Tick()
+        {
+            if (!_session.InPlacement) { _requestedCards = null; _specificPanel = null; }
+        }
+
+        bool OnSpecificShow(HookContext h)
+        {
+            _requestedCards = null;
+            _specificPanel = null;
+            if (!ArenaSession.Active || !_session.InPlacement || h.Args == null || h.Args.Length != 1) return true;
+            List<int> ids = h.Args[0] as List<int>;
+            if (ids == null) return true;
+            _specificPanel = h.Instance;
+            _requestedCards = new List<CardConfig>();
+            for (int i = 0; i < ids.Count; i++)
+            {
+                CardConfig config = CardFactory.FindCardConfig(ids[i]);
+                if (config != null) _requestedCards.Add(config);
+            }
+            return true;
+        }
+
+        bool BeginSpecificRefresh(HookContext h)
+        {
+            // OnStart can refresh again on the next frame after Show returns.
+            // Keep the requested list, but scope replacement to this panel.
+            if (!ArenaSession.Active || !_session.InPlacement || !object.ReferenceEquals(h.Instance, _specificPanel) || _requestedCards == null) return true;
+            try
+            {
+                if (!RenderRows(h.Instance, _requestedCards)) return true;
+                h.Skip(null);
+                return false;
+            }
+            catch (Exception e)
+            {
+                _ctx.Log.Warn(_ctx.T("特殊牌列表刷新失败：", "Specific card list refresh failed: ") + e.Message);
+                return true;
+            }
+        }
+
+        static bool RenderRows(object panel, List<CardConfig> cards)
+        {
+            // SetData is async void and now has FOUR parameters. Do not rewrite
+            // its async kickoff (or ConfigManager's shared predicate method).
+            // Use the game's rows directly from synchronous panel hooks, with
+            // no scaled-time delay that could stall while practice is paused.
+            FieldInfo field = panel.GetType().GetField("m_LevelCardsItems", BindingFlags.Instance | BindingFlags.NonPublic);
+            var rows = field == null ? null : field.GetValue(panel) as List<IllustrationLevelCardsItem>;
+            if (rows == null || rows.Count == 0) return false;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                Level realm = (Level)(i + 1);
+                var row = new List<CardConfig>();
+                for (int j = 0; j < cards.Count; j++)
+                    if (cards[j] != null && cards[j].level == realm) row.Add(cards[j]);
+                rows[i].SetData(realm, row, 0, null);
+            }
+            return true;
+        }
+
+        public void OpenQuick()
+        {
+            if (!_session.InPlacement) { Ui.Toast(_ctx.T("只能在备战界面发牌", "Cards can only be dealt on the setup screen")); return; }
+            CharacterConfig character = ConfigManager.GetCharacterConfig(_session.Editing.CharacterId);
+            if (character == null) { Ui.Toast(_ctx.T("无法读取当前角色的宗门", "Couldn't read this character's sect")); return; }
+            int season = (int)OpenManager.seasonMec;
+            int[] ids = QuickCards.Ids(AllFacts(), (int)character.sect, character.id, season, IsSwordOwner());
+            if (ids.Length == 0) { Ui.Toast(_ctx.T("当前宗门没有可显示的赛季牌", "No current-season cards for this sect")); return; }
+            DealMode = true;
+            _ctx.Log.Info(_ctx.T("快捷发牌：当前赛季 / ", "Quick deal: current season / ") +
+                TranslateUtil.GetSectTranslate((int)character.sect) + " / " + ids.Length.ToString(CultureInfo.InvariantCulture));
+            ShowCards(ids);
+        }
+
+        public bool IsSwordOwner()
+        {
+            CharacterConfig c = ConfigManager.GetCharacterConfig(_session.Editing.CharacterId);
+            return c != null && c.talents != null && c.talents.Contains(ChengxinSetup.GrindingTalent);
+        }
+
+        int PickForDeal(int id, string name)
+        {
+            int chosen = CardIds.BaseOf(id) == ChengxinSetup.SwordBaseId
+                ? ChengxinSetup.CardId(_session.Editing.Level) : CardIds.WithRarity(id, _cfg.Rarity);
+            if (_catalog.Exists(chosen)) return chosen;
+            Ui.Toast(_ctx.T(name + "没有所选等级，无法发牌", name + ": selected level is unavailable"));
+            return 0;
+        }
+
+        public void DealSword()
+        {
+            if (!_session.InPlacement || !IsSwordOwner()) return;
+            int id = PickForDeal(ChengxinSetup.SwordBaseId, "澄心剑胚");
+            if (id == 0 || !_session.Deal(id)) return;
+            Dealt++;
+            _notify(_ctx.T("发牌 → ", "Deal → ") + _session.Editing.Name + _ctx.T("：澄心剑胚", ": Chengxin Sword"));
         }
 
         bool OnCardClick(HookContext h)
@@ -59,13 +207,12 @@ namespace YxArena.Game
             IllustrationCardItem item = h.Instance as IllustrationCardItem;
             if (item == null || item.cardItem == null || item.cardItem.cardConfig == null) return true;
             CardConfig config = item.cardItem.cardConfig;
-            int id = CardIds.Pick(config.id, _cfg.Rarity, _catalog);
-            if (id == 0) return true;
+            int id = PickForDeal(config.id, config.name);
+            if (id == 0) { h.Skip(null); return false; }
             if (_session.Deal(id))
             {
                 Dealt++;
-                string note = CardIds.RarityOf(id) == _cfg.Rarity ? "" : _ctx.T("（没有" + ArenaConfig.RarityName(_cfg.Rarity) + "，发了 1 级）", " (no " + ArenaConfig.RarityName(_cfg.Rarity) + "; dealt Lv.1)");
-                _notify(_ctx.T("发牌 → ", "Deal → ") + _session.Editing.Name + _ctx.T("：", ": ") + config.name + " " + ArenaConfig.RarityName(CardIds.RarityOf(id)) + note);
+                _notify(_ctx.T("发牌 → ", "Deal → ") + _session.Editing.Name + _ctx.T("：", ": ") + config.name + " " + ArenaConfig.RarityName(CardIds.RarityOf(id)));
             }
             h.Skip(null);
             return false;
@@ -137,7 +284,7 @@ namespace YxArena.Game
                 _ctx.Log.Info(_ctx.T("搜牌「" + wanted + "」：" + foundN + " 张，能显示 " + showN + " 张",
                               "Search \"" + wanted + "\": " + foundN + " found, " + showN + " showable"));
                 if (showable.Length > 0) { ShowCards(showable); return; }
-                int id = CardIds.Pick(found[0], _cfg.Rarity, _catalog);
+                int id = PickForDeal(found[0], NameOf(found[0], all));
                 if (id == 0 || !_session.Deal(id)) return;
                 Dealt++;
                 _notify(_ctx.T("发牌 → ", "Deal → ") + _session.Editing.Name + _ctx.T("：", ": ") + NameOf(id, all) + _ctx.T("（没有境界，面板显示不了，直接发了）", " (no realm; can't show in panel, dealt directly)"));

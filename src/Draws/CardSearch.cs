@@ -28,7 +28,7 @@ namespace YxArena.Draws
             for (int i = 0; i < all.Length; i++)
             {
                 CardFacts c = all[i];
-                if (c == null || c.Id <= 0 || c.Obsolete || c.Rarity != 0) continue;
+                if (c == null || c.Id <= 0 || c.Obsolete || CardIds.RarityOf(c.Id) != 0) continue;
                 if (!Normalize(c.Name).Contains(wanted)) continue;
                 hit[i] = true;
                 count++;

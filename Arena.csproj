@@ -6,6 +6,7 @@
     <LangVersion>7.3</LangVersion>
     <DebugType>none</DebugType>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultItems>false</EnableDefaultItems>
     <NoWarn>CS1701;CS1702</NoWarn>
     <OutputPath>plugins\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -15,8 +16,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net40" Version="1.0.3" PrivateAssets="all" />
-    <ProjectReference Include="..\..\sdk\Yx.ModSdk.Core\Yx.ModSdk.Core.csproj"><Private>false</Private></ProjectReference>
-    <ProjectReference Include="..\..\sdk\Yx.ModSdk\Yx.ModSdk.csproj"><Private>false</Private></ProjectReference>
+    <Reference Include="Yx.ModSdk.Core"><HintPath>build\sdk-ref\net40\Yx.ModSdk.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Yx.ModSdk"><HintPath>build\sdk-ref\net40\Yx.ModSdk.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="DarkSun.HotUpdate"><HintPath>$(YxRefs)DarkSun.HotUpdate.dll</HintPath><Private>false</Private></Reference>
@@ -35,4 +36,7 @@
     <Reference Include="ILRuntime"><HintPath>$(YxRefs)ILRuntime.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="ILRuntime.Mono.Cecil"><HintPath>$(YxRefs)ILRuntime.Mono.Cecil.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
+  <Target Name="PrepareSdkReferences" BeforeTargets="ResolveAssemblyReferences">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\build\prepare-sdk-refs.ps1&quot;" />
+  </Target>
 </Project>

@@ -5,89 +5,112 @@ using Yx.Shared;
 
 namespace YxArena.Game
 {
-    /// <summary>
-    /// 解除战斗的回合上限和攻击段数上限（用户 2026-09-19 要求）。两个上限都是游戏方法中间的常量：
-    ///   BattleExecuter.Execute/3    局部变量 MAX_HUI_HE_COUNT = 64（单方回合数；async 方法，实际在状态机里）
-    ///   BattleCharacter.Attack/5    if (attackCount > 999) attackCount = 999
-    /// 钩子够不着，用 SDK 的 ctx.Hooks.OverrideConstant 把它们改成「可在运行时覆盖」的常量：改写本身不改变行为，
-    /// 只有练习场开打时才把覆盖值打开，回到正常对局（任何一次不在练习场里的 PlayBattle、回大厅、停用 mod）就关回原值
-    /// ——正常对局的战斗结果由服务器算，本地的上限必须和它一致。
-    /// </summary>
-    public sealed class Limits
-    {
-        readonly ModContext _ctx;
-        ConstOverride _rounds;
-        ConstOverride _hits;
-        bool _tried;
-        bool _failed;
+	public sealed class Limits
+	{
+		private readonly ModContext _ctx;
 
-        public Limits(ModContext ctx)
-        {
-            _ctx = ctx;
-        }
+		private ConstOverride _rounds;
 
-        public int Mode;
+		private ConstOverride _hits;
 
-        public void Install()
-        {
-            if (_ctx.Hooks.TryPrefix("BattleManager", "PlayBattle", 1, OnPlayBattle) != null) return;
-            _failed = true;
-            _ctx.Log.Warn(_ctx.T("解限不可用：上限保持原版", "Uncap unavailable: caps stay vanilla"));
-        }
+		private bool _tried;
 
-        /// <summary>开打前调（备战界面里，战斗代码此刻没有在跑）：第一次用到时改写那两个方法。</summary>
-        public void Prepare()
-        {
-            if (_tried || _failed || !LimitModes.Lifted(Mode)) return;
-            _tried = true;
-            try
-            {
-                _rounds = _ctx.Hooks.OverrideConstant("BattleExecuter", "Execute", 3, LimitModes.OriginalRounds, "MAX_HUI_HE_COUNT");
-                _hits = _ctx.Hooks.OverrideConstant("BattleCharacter", "Attack", 5, LimitModes.OriginalHits, "attackCount");
-                Describe(_ctx.T("回合上限", "round cap"), _rounds);
-                Describe(_ctx.T("攻击段数上限", "attack-hit cap"), _hits);
-            }
-            catch (Exception e)
-            {
-                _failed = true;
-                _ctx.Log.Error(_ctx.T("解限出错（上限保持原版）", "Uncap failed (caps stay vanilla)"), e);
-            }
-        }
+		private bool _failed;
 
-        void Describe(string what, ConstOverride site)
-        {
-            if (site.Applied) _ctx.Log.Info(_ctx.T("解限：", "Uncap: ") + what + _ctx.T("已可覆盖（", " is now overridable (") + site.Report.Describe() + _ctx.T("）", ")"));
-            else
-            {
-                _failed = true;
-                _ctx.Log.Warn(_ctx.T("解限：", "Uncap: ") + what + _ctx.T("没改成，保持原版（", " unchanged, stays vanilla (") + site.Report.Describe() + _ctx.T("）", ")"));
-            }
-        }
+		public int Mode;
 
-        bool OnPlayBattle(HookContext h)
-        {
-            if (ArenaSession.Active && LimitModes.Lifted(Mode)) Arm();
-            else Disarm();
-            return true;
-        }
+		public Limits(ModContext ctx)
+		{
+			_ctx = ctx;
+		}
 
-        void Arm()
-        {
-            if (_rounds != null) _rounds.Set(LimitModes.RoundCap(Mode));
-            if (_hits != null) _hits.Set(LimitModes.HitCap(Mode));
-        }
+		public void Install()
+		{
+			if (_ctx.Hooks.TryPrefix("BattleManager", "PlayBattle", 1, OnPlayBattle) == null)
+			{
+				_failed = true;
+				_ctx.Log.Warn(_ctx.T("解限不可用：上限保持原版", "Uncap unavailable: caps stay vanilla"));
+			}
+		}
 
-        /// <summary>关回游戏自己的上限。</summary>
-        public void Disarm()
-        {
-            if (_rounds != null) _rounds.Disable();
-            if (_hits != null) _hits.Disable();
-        }
+		public void Prepare()
+		{
+			if (_tried || _failed || !LimitModes.Lifted(Mode))
+			{
+				return;
+			}
+			_tried = true;
+			try
+			{
+				_rounds = _ctx.Hooks.OverrideConstant("BattleExecuter", "Execute", 3, 64, "MAX_HUI_HE_COUNT");
+				_hits = _ctx.Hooks.OverrideConstant("BattleCharacter", "Attack", 5, 999, "attackCount");
+				Describe(_ctx.T("回合上限", "round cap"), _rounds);
+				Describe(_ctx.T("攻击段数上限", "attack-hit cap"), _hits);
+			}
+			catch (Exception exception)
+			{
+				_failed = true;
+				_ctx.Log.Error(_ctx.T("解限出错（上限保持原版）", "Uncap failed (caps stay vanilla)"), exception);
+			}
+		}
 
-        /// <summary>状态行上的一小段；一切正常时为空。</summary>
-        public string Status()
-        {
-            return _failed ? _ctx.T("解限失败（见日志）", "Uncap failed (see log)") : "";
-        }
-    }
+		private void Describe(string what, ConstOverride site)
+		{
+			if (site.Applied)
+			{
+				_ctx.Log.Info(_ctx.T("解限：", "Uncap: ") + what + _ctx.T("已可覆盖（", " is now overridable (") + site.Report.Describe() + _ctx.T("）", ")"));
+			}
+			else
+			{
+				_failed = true;
+				_ctx.Log.Warn(_ctx.T("解限：", "Uncap: ") + what + _ctx.T("没改成，保持原版（", " unchanged, stays vanilla (") + site.Report.Describe() + _ctx.T("）", ")"));
+			}
+		}
+
+		private bool OnPlayBattle(HookContext h)
+		{
+			if (ArenaSession.Active && LimitModes.Lifted(Mode))
+			{
+				Arm();
+			}
+			else
+			{
+				Disarm();
+			}
+			return true;
+		}
+
+		private void Arm()
+		{
+			if (_rounds != null)
+			{
+				_rounds.Set(LimitModes.RoundCap(Mode));
+			}
+			if (_hits != null)
+			{
+				_hits.Set(LimitModes.HitCap(Mode));
+			}
+		}
+
+		public void Disarm()
+		{
+			if (_rounds != null)
+			{
+				_rounds.Disable();
+			}
+			if (_hits != null)
+			{
+				_hits.Disable();
+			}
+		}
+
+		public string Status()
+		{
+			if (!_failed)
+			{
+				return "";
+			}
+			return _ctx.T("解限失败（见日志）", "Uncap failed (see log)");
+		}
+	}
 }

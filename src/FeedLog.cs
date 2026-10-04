@@ -2,73 +2,85 @@ using System.Text;
 
 namespace YxArena
 {
-    /// <summary>
-    /// 向上滚动的消息流（「发牌：XX」）：新消息在最下面，旧的往上顶；只留最近几条，过一会儿自己消失。
-    /// 纯逻辑：时间由调用方给，渲染成一段多行文本。
-    /// </summary>
-    public sealed class FeedLog
-    {
-        readonly string[] _texts;
-        readonly double[] _expires;
-        readonly double _lifetime;
-        int _count;
-        string _rendered = "";
-        bool _changed;
+	public sealed class FeedLog
+	{
+		private readonly string[] _texts;
 
-        public FeedLog(int capacity, double lifetimeSeconds)
-        {
-            int size = capacity < 1 ? 1 : capacity;
-            _texts = new string[size];
-            _expires = new double[size];
-            _lifetime = lifetimeSeconds;
-        }
+		private readonly double[] _expires;
 
-        public void Add(string text, double now)
-        {
-            if (_count == _texts.Length)
-            {
-                for (int i = 1; i < _count; i++)
-                {
-                    _texts[i - 1] = _texts[i];
-                    _expires[i - 1] = _expires[i];
-                }
-                _count--;
-            }
-            _texts[_count] = text ?? "";
-            _expires[_count] = now + _lifetime;
-            _count++;
-            _changed = true;
-        }
+		private readonly double _lifetime;
 
-        /// <summary>自上次 Render 以来有没有变化（新消息，或有消息到期）。</summary>
-        public bool Dirty(double now)
-        {
-            if (_changed) return true;
-            return _count > 0 && _expires[0] <= now;
-        }
+		private int _count;
 
-        public string Render(double now)
-        {
-            int drop = 0;
-            while (drop < _count && _expires[drop] <= now) drop++;
-            if (drop > 0)
-            {
-                for (int i = drop; i < _count; i++)
-                {
-                    _texts[i - drop] = _texts[i];
-                    _expires[i - drop] = _expires[i];
-                }
-                _count -= drop;
-            }
-            var sb = new StringBuilder();
-            for (int i = 0; i < _count; i++)
-            {
-                if (i > 0) sb.Append((char)10);
-                sb.Append(_texts[i]);
-            }
-            _rendered = sb.ToString();
-            _changed = false;
-            return _rendered;
-        }
-    }
+		private string _rendered = "";
+
+		private bool _changed;
+
+		public FeedLog(int capacity, double lifetimeSeconds)
+		{
+			int num = ((capacity < 1) ? 1 : capacity);
+			_texts = new string[num];
+			_expires = new double[num];
+			_lifetime = lifetimeSeconds;
+		}
+
+		public void Add(string text, double now)
+		{
+			if (_count == _texts.Length)
+			{
+				for (int i = 1; i < _count; i++)
+				{
+					_texts[i - 1] = _texts[i];
+					_expires[i - 1] = _expires[i];
+				}
+				_count--;
+			}
+			_texts[_count] = text ?? "";
+			_expires[_count] = now + _lifetime;
+			_count++;
+			_changed = true;
+		}
+
+		public bool Dirty(double now)
+		{
+			if (_changed)
+			{
+				return true;
+			}
+			if (_count > 0)
+			{
+				return _expires[0] <= now;
+			}
+			return false;
+		}
+
+		public string Render(double now)
+		{
+			int i;
+			for (i = 0; i < _count && _expires[i] <= now; i++)
+			{
+			}
+			if (i > 0)
+			{
+				for (int j = i; j < _count; j++)
+				{
+					_texts[j - i] = _texts[j];
+					_expires[j - i] = _expires[j];
+				}
+				_count -= i;
+			}
+			StringBuilder stringBuilder = new StringBuilder();
+			for (int k = 0; k < _count; k++)
+			{
+				if (k > 0)
+				{
+					stringBuilder.Append('\n');
+				}
+				stringBuilder.Append(_texts[k]);
+			}
+			_rendered = stringBuilder.ToString();
+			_changed = false;
+			return _rendered;
+		}
+	}
 }

@@ -1,0 +1,14 @@
+{
+    "version":  "0.16.6",
+    "testsPassed":  200,
+    "releaseBuildErrors":  0,
+    "releaseBuildWarnings":  0,
+    "rendererMatchesGameSignature":  true,
+    "nativeSignature":  "System.Void IllustrationLevelCardsItem::SetData(Proto.Level,System.Collections.Generic.List`1\u003cProto.CardConfig\u003e,System.Int32,System.String)",
+    "panelRowFieldsPresent":  true,
+    "noAsyncRowOrSharedPredicateHooks":  true,
+    "handSource":  "executingCharacter.playerData.publicData.lastRoundData.handCards",
+    "sha256":  "762b114e6b7b4954254e18a8cc9b5f0e58ac25e1046ba0a0f4c0508ed86a0160",
+    "gameRefsSha256":  "8d08b25c7feb2f5a3bf2a7f913f8fc4f8631460c6597220d832569f6137986e4",
+    "inGameValidated":  false
+}

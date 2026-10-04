@@ -38,7 +38,7 @@ namespace YxArena.Tests
         [Theory]
         [InlineData(1000004, 2, 1020004)]
         [InlineData(1010004, 0, 1000004)]
-        [InlineData(1000004, 7, 1020004)]
+        [InlineData(1000004, 7, 1040004)]
         [InlineData(1000004, -1, 1000004)]
         public void WithRarity_rebuilds_the_id_and_clamps_the_rarity(int id, int rarity, int expected)
         {
@@ -52,9 +52,9 @@ namespace YxArena.Tests
         }
 
         [Fact]
-        public void Pick_falls_back_to_the_base_card_when_that_rarity_does_not_exist()
+        public void Pick_rejects_missing_levels_instead_of_silently_dealing_a_different_card()
         {
-            Assert.Equal(1000004, CardIds.Pick(1000004, 1, new FakeCatalog(1000004, 1020004)));
+            Assert.Equal(0, CardIds.Pick(1000004, 1, new FakeCatalog(1000004, 1020004)));
         }
 
         [Fact]

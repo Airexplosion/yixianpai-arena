@@ -5,3 +5,4 @@ dist/
 *.dll
 *.user
 *.zip
+build/sdk-ref/

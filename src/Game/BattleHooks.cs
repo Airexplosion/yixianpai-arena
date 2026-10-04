@@ -1,4 +1,7 @@
 using System;
+using System.Globalization;
+using System.Text;
+using Proto;
 using UnityEngine;
 using UnityEngine.UI;
 using Yx.ModSdk;
@@ -7,330 +10,511 @@ using Yx.Shared;
 
 namespace YxArena.Game
 {
-    /// <summary>
-    /// 步进与伤害统计的战斗钩子。
-    ///
-    ///   BattleManager.PlayBattle/1          前置：新的一场（含重播）→ 统计清零、步进复位
-    ///   CardActionBase.CheckCardCost/2      前置：每张牌的必经点（同步、全游戏只有主循环里一处调用，再次行动 / 连击各经过一次）
-    ///                                       → 记下「现在是谁在出哪张牌」；步进要停就在这里停
-    ///   BattleCharacter.OnTurnStarted/0     前置：回合数
-    ///   BattleCharacter.ApplyDamage/2       前置：Instance 是出手方，damageInfo.damage 是减防前的伤害
-    ///   BattleCharacter.OnHit/1             前置：记下这一击减防后的真实伤害；后置：Instance 是受击方，返回值是实际掉血
-    ///   BattleCharacterUI.AddTalentBuff/1   前置：同一个仙命占了几个槽时，战斗界面的图标表只加一次（它拿仙命 id 当字典键，
-    ///                                       加第二次会抛异常，整场战斗起不来——0.10.3 / 0.11.0 实机卡住就是这个）
-    ///   BattleCharacter.ModifyHp/5          后置：64 位血量池——游戏每次改完血量，把「游戏里的 hp + 池子余量」重新分配
-    ///                                       （OnHit 是在 ModifyHp 返回之后才判定死亡的，所以这里把 hp 补回来就不会死）
-    ///
-    /// 「破限」开着时战斗公式是饱和算术：游戏里的 int 到 2147483647 就停，那条运算链的 64 位真值由 SatMath 记着。
-    /// ApplyDamage 进来的伤害正好是被钉住的上限、SatMath 又有真值时，统计用真值（每张牌开始时清一次，免得串到下一张）。
-    ///
-    /// 暂停 / 继续一律点游戏回放面板自己的播放按钮（与玩家点是同一个入口），不直接写 Time.timeScale。
-    /// 处理器里的异常自己接住：交给 SDK 的话会计入错误预算，几次就把整个 mod 熔断了。
-    /// </summary>
-    public sealed class BattleHooks
-    {
-        readonly ModContext _ctx;
-        readonly DamageTally _tally;
-        readonly StepController _step;
-        readonly Overflow _overflow;
-        readonly ArenaSession _session;
-        readonly BigHpPool[] _pools = { new BigHpPool(), new BigHpPool() };
-        readonly long[] _totals = new long[2];
-        readonly OncePerOwner _talentIcons = new OncePerOwner();
-        HookGroup _group;
-        long _hitTrue;
-        long _hitPoolLoss;
-        bool _poolHooked;
-        bool _stepHooked;
-        bool _damageHooked;
-        bool _structReadBroken;
-        bool _warned;
-        bool _pending;
-        bool _reported = true;
-        int _pendingSide;
-        long _pendingDamage;
+	public sealed class BattleHooks
+	{
+		private readonly ModContext _ctx;
 
-        public BattleHooks(ModContext ctx, DamageTally tally, StepController step, Overflow overflow, ArenaSession session)
-        {
-            _session = session;
-            _ctx = ctx;
-            _tally = tally;
-            _step = step;
-            _overflow = overflow;
-        }
+		private readonly DamageTally _tally;
 
-        public bool StepAvailable { get { return _stepHooked; } }
+		private readonly StepController _step;
 
-        public bool TallyAvailable { get { return _damageHooked; } }
+		private readonly Overflow _overflow;
 
-        public void Install()
-        {
-            _group = _ctx.Hooks.Group("战斗");
-            bool play = Try("BattleManager", "PlayBattle", 1, OnPlayBattle);
-            bool card = Try("CardActionBase", "CheckCardCost", 2, OnCardAboutToPlay);
-            _stepHooked = play && card;
-            Try("BattleCharacter", "OnTurnStarted", 0, OnTurnStarted);
-            bool apply = Try("BattleCharacter", "ApplyDamage", 2, OnApplyDamage);
-            bool hit = _group.Postfix("BattleCharacter", "OnHit", 1, OnHitDone) != null;
-            _damageHooked = play && card && apply && hit;
-            Try("BattleCharacterUI", "AddTalentBuff", 1, OnAddTalentIcon);
-            Try("BattleCharacterUI", "ResetBuffItem", 0, OnResetIcons);
-            bool hitStart = Try("BattleCharacter", "OnHit", 1, OnHitStart);
-            _poolHooked = _group.Postfix("BattleCharacter", "ModifyHp", 5, OnHpModified) != null && play && hitStart;
-            if (!_poolHooked) _ctx.Log.Warn(_ctx.T("64 位血量池不可用：血量超过 20 亿的部分不生效", "64-bit HP pool unavailable: HP above ~2 billion won't take effect"));
-        }
+		private readonly ArenaSession _session;
 
-        bool Try(string type, string method, int paramCount, Func<HookContext, bool> handler)
-        {
-            return _group.Prefix(type, method, paramCount, handler) != null;
-        }
+		private readonly BigHpPool[] _pools = new BigHpPool[2]
+		{
+			new BigHpPool(),
+			new BigHpPool()
+		};
 
-        void Broken(string where, Exception e)
-        {
-            if (!_warned) _ctx.Log.Error(_ctx.T("战斗钩子 " + where + " 出错（之后不再报）", "Battle hook " + where + " failed (won't report again)"), e);
-            _warned = true;
-        }
+		private readonly long[] _totals = new long[2];
 
-        static int SideOf(object character)
-        {
-            BattleCharacter c = character as BattleCharacter;
-            if (c == null || c.battleExecuter == null) return -1;
-            return c == c.battleExecuter.leftCharacter ? 0 : 1;
-        }
+		private readonly OncePerOwner _talentIcons = new OncePerOwner();
 
-        // ── 处理器 ────────────────────────────────────────────────────────
+		private HookGroup _group;
 
-        bool OnPlayBattle(HookContext h)
-        {
-            if (!ArenaSession.Active) return true;
-            LogReport();          // 重播：上一遍的统计先记进日志
-            _reported = false;
-            _tally.Reset();
-            _step.OnBattleStart();
-            _pending = false;
-            SatMath.ClearTrue();
-            _talentIcons.Reset();
-            _hitTrue = 0L;
-            _hitPoolLoss = 0L;
-            for (int i = 0; i < 2; i++)
-            {
-                _totals[i] = _poolHooked ? _session.TrueTotalHp(i) : 0L;
-                _pools[i].Reset(_totals[i], _session.GameTotalHp(i));
-            }
-            return true;
-        }
+		private long _hitTrue;
 
-        bool OnCardAboutToPlay(HookContext h)
-        {
-            if (!ArenaSession.Active) return true;
-            try
-            {
-                FlushPending();
-                CardActionBase action = h.Instance as CardActionBase;
-                int side = SideOf(h.Args != null && h.Args.Length > 0 ? h.Args[0] : null);
-                string name = action != null && action.cardConfig != null ? action.cardConfig.name : "";
-                _tally.BeginCard(side, name);
-                SatMath.ClearTrue();
-                if (action != null && action.cardConfig != null) _overflow.OnCardAboutToPlay(action.cardConfig.id);
-                if (_step.ShouldPauseBeforeCard()) SetPaused(true);
-            }
-            catch (Exception e) { Broken("CheckCardCost", e); }
-            return true;
-        }
+		private long _hitPoolLoss;
 
-        bool OnTurnStarted(HookContext h)
-        {
-            if (!ArenaSession.Active) return true;
-            try
-            {
-                FlushPending();
-                _tally.BeginTurn(SideOf(h.Instance));
-            }
-            catch (Exception e) { Broken("OnTurnStarted", e); }
-            return true;
-        }
+		private bool _poolHooked;
 
-        bool OnApplyDamage(HookContext h)
-        {
-            if (!ArenaSession.Active) return true;
-            try
-            {
-                FlushPending();
-                if (h.Args == null || h.Args.Length < 2) return true;
-                if (object.ReferenceEquals(h.Args[0], h.Instance)) return true;     // 打自己的不算「造成的伤害」
-                _pendingSide = SideOf(h.Instance);
-                _pendingDamage = -1L;
-                if (!_structReadBroken)
-                {
-                    try
-                    {
-                        DamageInfo info = (DamageInfo)h.Args[1];
-                        _pendingDamage = TrueDamage(info.damage);
-                    }
-                    catch (Exception)
-                    {
-                        // DamageInfo 是 struct：装箱的参数读不出来就只按实际掉血统计。
-                        _structReadBroken = true;
-                        _ctx.Log.Warn(_ctx.T("伤害统计：读不到减防前的伤害值，之后「总伤害」按实际掉血算", "Damage tally: can't read pre-defense damage; \"Total dmg\" will be counted as actual HP lost"));
-                    }
-                }
-                _pending = true;
-            }
-            catch (Exception e) { Broken("ApplyDamage", e); }
-            return true;
-        }
+		private bool _stepHooked;
 
-        /// <summary>被钉在上限的伤害：SatMath 记着这条运算链的真值就用真值。</summary>
-        static long TrueDamage(int damage)
-        {
-            long value = damage;
-            if (damage == int.MaxValue && SatMath.HasTrue && SatMath.TrueValue > value) return SatMath.TrueValue;
-            return value;
-        }
+		private bool _damageHooked;
 
-        /// <summary>游戏清空了这个角色的图标表：去重记录跟着清。</summary>
-        bool OnResetIcons(HookContext h)
-        {
-            _talentIcons.Forget(h.Instance);
-            return true;
-        }
+		private bool _structReadBroken;
 
-        bool OnAddTalentIcon(HookContext h)
-        {
-            if (!ArenaSession.Active) return true;
-            if (h.Args == null || h.Args.Length < 1 || !(h.Args[0] is int)) return true;
-            if (_talentIcons.FirstTime(h.Instance, (int)h.Args[0])) return true;
-            h.Skip(null);
-            return false;
-        }
+		private bool _warned;
 
-        bool OnHitStart(HookContext h)
-        {
-            if (!ArenaSession.Active) return true;
-            _hitTrue = 0L;
-            _hitPoolLoss = 0L;
-            if (_structReadBroken || h.Args == null || h.Args.Length < 1) return true;
-            try
-            {
-                DamageInfo info = (DamageInfo)h.Args[0];
-                _hitTrue = TrueDamage(info.damage);
-            }
-            catch (Exception) { _structReadBroken = true; }
-            return true;
-        }
+		private bool _pending;
 
-        /// <summary>
-        /// 游戏刚改完一次血量。用了血量池的一方：把余量补回游戏里的 hp（写 battleTempData.hp 并同步血条，和游戏自己
-        /// 「消耗生命」那条分支的写法一样）。hp 被钉在 int.MinValue（一刀超过 hp 二十多亿）时，真实的 hp 用这一击的真实伤害算。
-        /// </summary>
-        void OnHpModified(HookContext h)
-        {
-            if (!ArenaSession.Active) return;
-            try
-            {
-                int side = SideOf(h.Instance);
-                if (side < 0 || !_pools[side].Active) return;
-                BattleCharacter c = h.Instance as BattleCharacter;
-                if (c == null || c.battleTempData == null) return;
-                BigHpPool pool = _pools[side];
-                int hpNow = c.battleTempData.hp;
-                long hpTrue = hpNow;
-                if (hpNow == int.MinValue)
-                {
-                    if (_hitTrue > 0L) hpTrue = pool.Hp - _hitTrue;
-                    else if (SatMath.HasTrue && SatMath.TrueValue < hpTrue) hpTrue = SatMath.TrueValue;
-                }
-                int fixedHp = pool.Normalize(hpTrue);
-                _hitPoolLoss += pool.LastLoss;
-                if (fixedHp == hpNow) return;
-                c.battleTempData.hp = fixedHp;
-                if (c.characterUI != null) c.characterUI.hp = fixedHp;
-            }
-            catch (Exception e) { Broken("ModifyHp", e); }
-        }
+		private bool _reported = true;
 
-        /// <summary>两方的统计文本（悬浮窗和日志共用）。</summary>
-        public string Report(int topCards)
-        {
-            var sb = new System.Text.StringBuilder();
-            for (int side = 0; side < 2; side++)
-            {
-                if (side > 0) sb.Append((char)10).Append((char)10);
-                sb.Append(_tally.Render(side, _session.SideName(side), topCards));
-                string hp = HpLine(side, _session.SideName(side));
-                if (hp.Length > 0) sb.Append((char)10).Append(hp);
-            }
-            return sb.ToString();
-        }
+		private int _pendingSide;
 
-        /// <summary>一场打完（离开斗法阶段 / 重播）时把统计记进会话日志，方便事后对数。每场只记一次。</summary>
-        public void LogReport()
-        {
-            if (_reported) return;
-            _reported = true;
-            if (_tally.TotalDamage(0) + _tally.TotalDamage(1) <= 0L) return;
-            string text = Report(12).Replace(((char)10).ToString(), " ｜ ");
-            string overflows = SatMath.Overflows.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            _ctx.Log.Info(_ctx.T("伤害统计：" + text + " ｜ 溢出 " + overflows + " 次（累计）", "Damage tally: " + text + " ｜ overflows " + overflows + " (cumulative)"));
-        }
+		private bool _reviewTrace;
 
-        /// <summary>用了 64 位血量池的一方的真实血量（没用上返回空串）。</summary>
-        public string HpLine(int side, string name)
-        {
-            if (side < 0 || side > 1 || !_pools[side].Active) return "";
-            long left = _pools[side].Effective;
-            if (left < 0L) left = 0L;
-            return name + _ctx.T("　真实血量 ", "  True HP ") + DamageTally.Group(left) + " / " + DamageTally.Group(_totals[side]);
-        }
+		private int _traceCards;
 
-        void OnHitDone(HookContext h)
-        {
-            if (!ArenaSession.Active || !_pending) return;
-            try
-            {
-                long hpLoss = h.Result is int ? TrueDamage((int)h.Result) : 0L;
-                int victim = SideOf(h.Instance);
-                if (victim >= 0 && _pools[victim].Active) hpLoss = _hitPoolLoss;
-                _hitTrue = 0L;
-                _tally.AddDamage(_pendingSide, _pendingDamage >= 0L ? _pendingDamage : hpLoss, hpLoss);
-                _pending = false;
-            }
-            catch (Exception e) { Broken("OnHit", e); }
-        }
+		private int _traceTurns;
 
-        /// <summary>有一次 ApplyDamage 没有走到 OnHit（比如被完全挡掉）：按「有伤害、没掉血」记上。</summary>
-        void FlushPending()
-        {
-            if (!_pending) return;
-            _pending = false;
-            if (_pendingDamage > 0L) _tally.AddDamage(_pendingSide, _pendingDamage, 0L);
-        }
+		private BattleExecuter _traceExecuter;
 
-        // ── 暂停 / 步进：点游戏自己的播放按钮 ─────────────────────────────────
+		private long _pendingDamage;
 
-        public static bool IsPaused { get { return Time.timeScale == 0f; } }
+		public bool StepAvailable => _stepHooked;
 
-        static Button FindPlayButton()
-        {
-            BattlePanel bp = ILRPanelBase.FindILRPanel<BattlePanel>();
-            BattleReplayPanel rp = bp != null ? bp.FindILRSubPanel<BattleReplayPanel>() : null;
-            if (rp == null || rp.panel == null || !rp.panel.isShow) return null;
-            return rp.FindComponent<Button>("PlayButton");
-        }
+		public bool TallyAvailable => _damageHooked;
 
-        void SetPaused(bool paused)
-        {
-            if (IsPaused == paused) return;
-            Button play = FindPlayButton();
-            if (play == null || !play.IsActive() || !play.IsInteractable()) return;
-            play.onClick.Invoke();
-        }
+		public static bool IsPaused => Time.timeScale == 0f;
 
-        /// <summary>「步进」按钮：在暂停就放行，下一张牌之前再停；在播放就等当前这张打完停。</summary>
-        public void Step()
-        {
-            if (!_stepHooked) return;
-            if (_step.RequestStep(IsPaused)) SetPaused(false);
-        }
-    }
+		public BattleHooks(ModContext ctx, DamageTally tally, StepController step, Overflow overflow, ArenaSession session)
+		{
+			_session = session;
+			_ctx = ctx;
+			_tally = tally;
+			_step = step;
+			_overflow = overflow;
+		}
+
+		public void Install()
+		{
+			_group = _ctx.Hooks.Group("战斗");
+			bool flag = Try("BattleManager", "PlayBattle", 1, OnPlayBattle);
+			bool flag2 = Try("CardActionBase", "CheckCardCost", 2, OnCardAboutToPlay);
+			_stepHooked = flag && flag2;
+			Try("BattleCharacter", "OnTurnStarted", 0, OnTurnStarted);
+			bool flag3 = Try("BattleCharacter", "ApplyDamage", 2, OnApplyDamage);
+			bool flag4 = _group.Postfix("BattleCharacter", "OnHit", 1, OnHitDone) != null;
+			_damageHooked = flag && flag2 && flag3 && flag4;
+			Try("BattleCharacterUI", "AddTalentBuff", 1, OnAddTalentIcon);
+			Try("BattleCharacterUI", "ResetBuffItem", 0, OnResetIcons);
+			bool flag5 = Try("BattleCharacter", "OnHit", 1, OnHitStart);
+			_poolHooked = _group.Postfix("BattleCharacter", "ModifyHp", 5, OnHpModified) != null && flag && flag5;
+			if (!_poolHooked)
+			{
+				_ctx.Log.Warn(_ctx.T("64 位血量池不可用：血量超过 20 亿的部分不生效", "64-bit HP pool unavailable: HP above ~2 billion won't take effect"));
+			}
+		}
+
+		private bool Try(string type, string method, int paramCount, Func<HookContext, bool> handler)
+		{
+			return _group.Prefix(type, method, paramCount, handler) != null;
+		}
+
+		private void Broken(string where, Exception e)
+		{
+			if (!_warned)
+			{
+				_ctx.Log.Error(_ctx.T("战斗钩子 " + where + " 出错（之后不再报）", "Battle hook " + where + " failed (won't report again)"), e);
+			}
+			_warned = true;
+		}
+
+		private static int SideOf(object character)
+		{
+			if (!(character is BattleCharacter battleCharacter) || battleCharacter.battleExecuter == null)
+			{
+				return -1;
+			}
+			return (battleCharacter != battleCharacter.battleExecuter.leftCharacter) ? 1 : 0;
+		}
+
+		private bool OnPlayBattle(HookContext h)
+		{
+			if (!ArenaSession.Active)
+			{
+				return true;
+			}
+			LogReport();
+			_reviewTrace = _session.FromReview;
+			_traceCards = 0;
+			_traceTurns = 0;
+			_traceExecuter = null;
+			if (_reviewTrace)
+			{
+				try
+				{
+					Proto.BattleResult result = BattleManager.currentBattleResult;
+					if (result != null)
+					{
+						string first = result.firstPlayerId == result.mainViewId ? "我方" : "对手";
+						_ctx.Log.Info("对拍开局：轮次 " + TraceNumber(result.round) + "，先手 " + first);
+					}
+				}
+				catch (Exception) { _ctx.Log.Warn("对拍开局：无法读取先手"); }
+			}
+			_reported = false;
+			_tally.Reset();
+			_step.OnBattleStart();
+			_pending = false;
+			SatMath.ClearTrue();
+			_talentIcons.Reset();
+			_hitTrue = 0L;
+			_hitPoolLoss = 0L;
+			for (int i = 0; i < 2; i++)
+			{
+				_totals[i] = (_poolHooked ? _session.TrueTotalHp(i) : 0);
+				_pools[i].Reset(_totals[i], _session.GameTotalHp(i));
+			}
+			return true;
+		}
+
+		private bool OnCardAboutToPlay(HookContext h)
+		{
+			if (!ArenaSession.Active)
+			{
+				return true;
+			}
+			try
+			{
+				FlushPending();
+				CardActionBase cardActionBase = h.Instance as CardActionBase;
+				if (_reviewTrace && cardActionBase != null && cardActionBase.cardConfig != null && h.Args != null && h.Args.Length > 0)
+				{
+					_traceCards++;
+					TraceState("出牌前 #" + TraceNumber(_traceCards) + " card=" + TraceNumber(cardActionBase.cardConfig.id), h.Args[0] as BattleCharacter);
+				}
+				int side = SideOf((h.Args != null && h.Args.Length != 0) ? h.Args[0] : null);
+				string cardName = ((cardActionBase != null && cardActionBase.cardConfig != null) ? cardActionBase.cardConfig.name : "");
+				_tally.BeginCard(side, cardName);
+				SatMath.ClearTrue();
+				if (cardActionBase != null && cardActionBase.cardConfig != null)
+				{
+					_overflow.OnCardAboutToPlay(cardActionBase.cardConfig.id);
+				}
+				if (_step.ShouldPauseBeforeCard())
+				{
+					SetPaused(paused: true);
+				}
+			}
+			catch (Exception e)
+			{
+				Broken("CheckCardCost", e);
+			}
+			return true;
+		}
+
+		private bool OnTurnStarted(HookContext h)
+		{
+			if (!ArenaSession.Active)
+			{
+				return true;
+			}
+			try
+			{
+				FlushPending();
+				_tally.BeginTurn(SideOf(h.Instance));
+				if (_reviewTrace)
+				{
+					_traceTurns++;
+					TraceState("回合前 #" + TraceNumber(_traceTurns), h.Instance as BattleCharacter);
+				}
+			}
+			catch (Exception e)
+			{
+				Broken("OnTurnStarted", e);
+			}
+			return true;
+		}
+
+		private bool OnApplyDamage(HookContext h)
+		{
+			if (!ArenaSession.Active)
+			{
+				return true;
+			}
+			try
+			{
+				FlushPending();
+				if (h.Args == null || h.Args.Length < 2)
+				{
+					return true;
+				}
+				if (h.Args[0] == h.Instance)
+				{
+					return true;
+				}
+				_pendingSide = SideOf(h.Instance);
+				_pendingDamage = -1L;
+				if (!_structReadBroken)
+				{
+					try
+					{
+						_pendingDamage = TrueDamage(((DamageInfo)h.Args[1]).damage);
+					}
+					catch (Exception)
+					{
+						_structReadBroken = true;
+						_ctx.Log.Warn(_ctx.T("伤害统计：读不到减防前的伤害值，之后「总伤害」按实际掉血算", "Damage tally: can't read pre-defense damage; \"Total dmg\" will be counted as actual HP lost"));
+					}
+				}
+				_pending = true;
+			}
+			catch (Exception e)
+			{
+				Broken("ApplyDamage", e);
+			}
+			return true;
+		}
+
+		private static long TrueDamage(int damage)
+		{
+			long num = damage;
+			if (damage == int.MaxValue && SatMath.HasTrue && SatMath.TrueValue > num)
+			{
+				return SatMath.TrueValue;
+			}
+			return num;
+		}
+
+		private bool OnResetIcons(HookContext h)
+		{
+			_talentIcons.Forget(h.Instance);
+			return true;
+		}
+
+		private bool OnAddTalentIcon(HookContext h)
+		{
+			if (!ArenaSession.Active)
+			{
+				return true;
+			}
+			if (h.Args == null || h.Args.Length < 1 || !(h.Args[0] is int))
+			{
+				return true;
+			}
+			if (_talentIcons.FirstTime(h.Instance, (int)h.Args[0]))
+			{
+				return true;
+			}
+			h.Skip(null);
+			return false;
+		}
+
+		private bool OnHitStart(HookContext h)
+		{
+			if (!ArenaSession.Active)
+			{
+				return true;
+			}
+			_hitTrue = 0L;
+			_hitPoolLoss = 0L;
+			if (_structReadBroken || h.Args == null || h.Args.Length < 1)
+			{
+				return true;
+			}
+			try
+			{
+				_hitTrue = TrueDamage(((DamageInfo)h.Args[0]).damage);
+			}
+			catch (Exception)
+			{
+				_structReadBroken = true;
+			}
+			return true;
+		}
+
+		private void OnHpModified(HookContext h)
+		{
+			if (!ArenaSession.Active)
+			{
+				return;
+			}
+			try
+			{
+				int num = SideOf(h.Instance);
+				if (num < 0 || !_pools[num].Active || !(h.Instance is BattleCharacter battleCharacter) || battleCharacter.battleTempData == null)
+				{
+					return;
+				}
+				BigHpPool bigHpPool = _pools[num];
+				int hp = battleCharacter.battleTempData.hp;
+				long num2 = hp;
+				if (hp == int.MinValue)
+				{
+					if (_hitTrue > 0)
+					{
+						num2 = bigHpPool.Hp - _hitTrue;
+					}
+					else if (SatMath.HasTrue && SatMath.TrueValue < num2)
+					{
+						num2 = SatMath.TrueValue;
+					}
+				}
+				int num3 = bigHpPool.Normalize(num2);
+				_hitPoolLoss += bigHpPool.LastLoss;
+				if (num3 != hp)
+				{
+					battleCharacter.battleTempData.hp = num3;
+					if (battleCharacter.characterUI != null)
+					{
+						battleCharacter.characterUI.hp = num3;
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				Broken("ModifyHp", e);
+			}
+		}
+
+		public string Report(int topCards)
+		{
+			StringBuilder stringBuilder = new StringBuilder();
+			for (int i = 0; i < 2; i++)
+			{
+				if (i > 0)
+				{
+					stringBuilder.Append('\n').Append('\n');
+				}
+				stringBuilder.Append(_tally.Render(i, _session.SideName(i), topCards));
+				string text = HpLine(i, _session.SideName(i));
+				if (text.Length > 0)
+				{
+					stringBuilder.Append('\n').Append(text);
+				}
+			}
+			return stringBuilder.ToString();
+		}
+
+		public void LogReport()
+		{
+			if (!_reported)
+			{
+				_reported = true;
+				if (_reviewTrace && _traceExecuter != null)
+				{
+					TraceState("结束或退出", _traceExecuter.leftCharacter);
+				}
+				_reviewTrace = false;
+				_traceExecuter = null;
+				if (_tally.TotalDamage(0) + _tally.TotalDamage(1) > 0)
+				{
+					string text = Report(12).Replace('\n'.ToString(), " ｜ ");
+					string text2 = SatMath.Overflows.ToString(CultureInfo.InvariantCulture);
+					_ctx.Log.Info(_ctx.T("伤害统计：" + text + " ｜ 溢出 " + text2 + " 次（累计）", "Damage tally: " + text + " ｜ overflows " + text2 + " (cumulative)"));
+				}
+			}
+		}
+
+		private static string TraceNumber(int value)
+		{
+			return value.ToString(CultureInfo.InvariantCulture);
+		}
+
+		private static string TraceSide(BattleCharacter character)
+		{
+			if (character == null || character.battleTempData == null) return "未就绪";
+			BattleTempData data = character.battleTempData;
+			return "hp=" + TraceNumber(data.hp) + "/" + TraceNumber(data.maxHp)
+				+ ",def=" + TraceNumber(data.def) + ",anima=" + TraceNumber(data.anima)
+				+ ",body=" + TraceNumber(character.GetBuffValue(BuffType.TiPo))
+				+ ",bodyCap=" + TraceNumber(character.GetBuffValue(BuffType.TiPoShangXian))
+				+ ",agility=" + TraceNumber(character.GetBuffValue(BuffType.ShenFa))
+				+ ",force=" + TraceNumber(character.GetBuffValue(BuffType.QiShi))
+				+ ",injury=" + TraceNumber(character.GetBuffValue(BuffType.NeiShang))
+				+ ",earth=" + TraceNumber(character.GetBuffValue(BuffType.JiHuoTuLing))
+				+ ",chase=" + TraceNumber(character.GetBuffValue(BuffType.ZhuChenBu));
+		}
+
+		private void TraceState(string stage, BattleCharacter actor)
+		{
+			if (_traceCards > 256 || _traceTurns > 128 || actor == null || actor.battleExecuter == null) return;
+			try
+			{
+				_traceExecuter = actor.battleExecuter;
+				string side = actor == _traceExecuter.leftCharacter ? "我方" : "对手";
+				_ctx.Log.Info("对拍 " + stage + " actor=" + side + " | L " + TraceSide(_traceExecuter.leftCharacter)
+					+ " | R " + TraceSide(_traceExecuter.rightCharacter));
+			}
+			catch (Exception)
+			{
+				_reviewTrace = false;
+				_ctx.Log.Warn("逐牌对拍记录不可用，本场不再记录");
+			}
+		}
+
+		public string HpLine(int side, string name)
+		{
+			if (side < 0 || side > 1 || !_pools[side].Active)
+			{
+				return "";
+			}
+			long num = _pools[side].Effective;
+			if (num < 0)
+			{
+				num = 0L;
+			}
+			return name + _ctx.T("\u3000真实血量 ", "  True HP ") + DamageTally.Group(num) + " / " + DamageTally.Group(_totals[side]);
+		}
+
+		private void OnHitDone(HookContext h)
+		{
+			if (!ArenaSession.Active || !_pending)
+			{
+				return;
+			}
+			try
+			{
+				long num = ((h.Result is int) ? TrueDamage((int)h.Result) : 0);
+				int num2 = SideOf(h.Instance);
+				if (num2 >= 0 && _pools[num2].Active)
+				{
+					num = _hitPoolLoss;
+				}
+				_hitTrue = 0L;
+				_tally.AddDamage(_pendingSide, (_pendingDamage >= 0) ? _pendingDamage : num, num);
+				_pending = false;
+			}
+			catch (Exception e)
+			{
+				Broken("OnHit", e);
+			}
+		}
+
+		private void FlushPending()
+		{
+			if (_pending)
+			{
+				_pending = false;
+				if (_pendingDamage > 0)
+				{
+					_tally.AddDamage(_pendingSide, _pendingDamage, 0L);
+				}
+			}
+		}
+
+		private static Button FindPlayButton()
+		{
+			BattleReplayPanel battleReplayPanel = ILRPanelBase.FindILRPanel<BattlePanel>()?.FindILRSubPanel<BattleReplayPanel>();
+			if (battleReplayPanel == null || battleReplayPanel.panel == null || !battleReplayPanel.panel.isShow)
+			{
+				return null;
+			}
+			return battleReplayPanel.FindComponent<Button>("PlayButton");
+		}
+
+		private void SetPaused(bool paused)
+		{
+			if (IsPaused != paused)
+			{
+				Button button = FindPlayButton();
+				if (!(button == null) && button.IsActive() && button.IsInteractable())
+				{
+					button.onClick.Invoke();
+				}
+			}
+		}
+
+		public void Step()
+		{
+			if (_stepHooked && _step.RequestStep(IsPaused))
+			{
+				SetPaused(paused: false);
+			}
+		}
+	}
 }
